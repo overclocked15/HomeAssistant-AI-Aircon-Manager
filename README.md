@@ -33,26 +33,35 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
 
 ## Installation
 
-### Option 1: Manual Installation
+### Option 1: HACS (Recommended)
 
-1. Copy the `ai_aircon_manager` folder to your `custom_components` directory:
+1. Open HACS in Home Assistant
+2. Click on "Integrations"
+3. Click the three dots in the top right corner and select "Custom repositories"
+4. Add this repository URL: `https://github.com/overclocked15/HomeAssistant-AI-Aircon-Manager`
+5. Select category "Integration"
+6. Click "Add"
+7. Find "AI Aircon Manager" in the list and click "Download"
+8. Restart Home Assistant
+
+### Option 2: Manual Installation
+
+1. Download this repository
+2. Copy the `custom_components/ai_aircon_manager` folder to your Home Assistant `config/custom_components/` directory
+3. Your directory structure should look like:
    ```
-   custom_components/
-   └── ai_aircon_manager/
-       ├── __init__.py
-       ├── climate.py
-       ├── config_flow.py
-       ├── const.py
-       ├── manifest.json
-       ├── optimizer.py
-       └── strings.json
+   config/
+   └── custom_components/
+       └── ai_aircon_manager/
+           ├── __init__.py
+           ├── climate.py
+           ├── config_flow.py
+           ├── const.py
+           ├── manifest.json
+           ├── optimizer.py
+           └── strings.json
    ```
-
-2. Restart Home Assistant
-
-### Option 2: HACS (when available)
-
-This integration can be added to HACS as a custom repository.
+4. Restart Home Assistant
 
 ## Configuration
 
