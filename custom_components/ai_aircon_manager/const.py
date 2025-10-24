@@ -10,6 +10,7 @@ CONF_ROOM_CONFIGS = "room_configs"
 CONF_ROOM_NAME = "room_name"
 CONF_TEMPERATURE_SENSOR = "temperature_sensor"
 CONF_COVER_ENTITY = "cover_entity"
+CONF_MAIN_CLIMATE_ENTITY = "main_climate_entity"
 CONF_UPDATE_INTERVAL = "update_interval"
 
 # AI Providers

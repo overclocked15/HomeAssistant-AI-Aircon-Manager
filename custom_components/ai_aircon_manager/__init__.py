@@ -14,7 +14,7 @@ from .optimizer import AirconOptimizer
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.CLIMATE]
+PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -28,6 +28,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         api_key=entry.data.get("api_key"),
         target_temperature=entry.data.get("target_temperature", 22),
         room_configs=entry.data.get("room_configs", {}),
+        main_climate_entity=entry.data.get("main_climate_entity"),
     )
 
     # Create coordinator for periodic updates

@@ -20,6 +20,7 @@ class AirconOptimizer:
         api_key: str,
         target_temperature: float,
         room_configs: list[dict[str, Any]],
+        main_climate_entity: str | None = None,
     ) -> None:
         """Initialize the optimizer."""
         self.hass = hass
@@ -27,7 +28,9 @@ class AirconOptimizer:
         self.api_key = api_key
         self.target_temperature = target_temperature
         self.room_configs = room_configs
+        self.main_climate_entity = main_climate_entity
         self._ai_client = None
+        self._last_ai_response = None
 
     async def async_setup(self) -> None:
         """Set up the AI client."""
@@ -52,9 +55,24 @@ class AirconOptimizer:
         # Apply recommendations
         await self._apply_recommendations(recommendations)
 
+        # Get main climate entity state if configured
+        main_climate_state = None
+        if self.main_climate_entity:
+            climate_state = self.hass.states.get(self.main_climate_entity)
+            if climate_state:
+                main_climate_state = {
+                    "state": climate_state.state,
+                    "temperature": climate_state.attributes.get("temperature"),
+                    "current_temperature": climate_state.attributes.get("current_temperature"),
+                    "hvac_mode": climate_state.attributes.get("hvac_mode"),
+                    "hvac_action": climate_state.attributes.get("hvac_action"),
+                }
+
         return {
             "room_states": room_states,
             "recommendations": recommendations,
+            "ai_response_text": self._last_ai_response,
+            "main_climate_state": main_climate_state,
         }
 
     async def _collect_room_states(self) -> dict[str, dict[str, Any]]:
@@ -109,6 +127,9 @@ class AirconOptimizer:
                     messages=[{"role": "user", "content": prompt}],
                 )
                 ai_response = response.choices[0].message.content
+
+            # Store the response for debugging
+            self._last_ai_response = ai_response
 
             # Parse AI response to extract cover positions
             recommendations = self._parse_ai_response(ai_response, room_states)

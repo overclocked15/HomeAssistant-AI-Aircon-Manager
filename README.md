@@ -69,9 +69,11 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
 2. Click **Add Integration**
 3. Search for "AI Aircon Manager"
 4. Follow the configuration steps:
-   - **Step 1**: Choose AI provider (Claude or ChatGPT) and enter API key
-   - **Step 2**: Set target temperature (e.g., 22°C)
-   - **Step 3**: Add rooms one by one:
+   - **Step 1**:
+     - Choose AI provider (Claude or ChatGPT) and enter API key
+     - Set target temperature (e.g., 22°C)
+     - **(Optional)** Select your main aircon climate entity for monitoring
+   - **Step 2**: Add rooms one by one:
      - Room name (e.g., "Bedroom")
      - Temperature sensor entity
      - Zone fan speed control entity
@@ -96,6 +98,27 @@ The climate entity includes additional attributes:
 - `room_temperatures`: Current temperature of each room
 - `cover_positions`: Current zone fan speed of each room (0-100%)
 - `ai_recommendations`: Latest AI recommendations for fan speeds
+
+### Diagnostic Sensors
+
+The integration creates several diagnostic sensors for each room to help you troubleshoot and monitor the system:
+
+**Per-Room Sensors:**
+- `sensor.{room_name}_temperature_difference` - Shows how many degrees the room is from target
+  - Attributes include status: `too_hot`, `too_cold`, or `at_target`
+- `sensor.{room_name}_ai_recommendation` - Shows the AI's recommended fan speed for this room
+  - Attributes show current vs recommended speed and the change being made
+- `sensor.{room_name}_fan_speed` - Current fan speed percentage
+
+**Overall System Sensors:**
+- `sensor.ai_optimization_status` - Overall system status
+  - Values: `maintaining`, `equalizing`, `cooling`, `reducing_cooling`
+  - Attributes include temperature variance, min/max temps, average temp
+- `sensor.ai_last_response` - Shows the last AI response for debugging
+  - Attributes include the raw AI response text for troubleshooting
+- `binary_sensor.main_aircon_running` - *(Optional)* Shows if your main aircon is running
+  - Only created if you configured a main climate entity
+  - Attributes show HVAC mode, action, and temperatures
 
 ### Automation Example
 

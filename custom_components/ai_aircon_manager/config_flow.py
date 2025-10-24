@@ -21,6 +21,7 @@ from .const import (
     CONF_ROOM_NAME,
     CONF_TEMPERATURE_SENSOR,
     CONF_COVER_ENTITY,
+    CONF_MAIN_CLIMATE_ENTITY,
     AI_PROVIDER_CLAUDE,
     AI_PROVIDER_CHATGPT,
     DEFAULT_TARGET_TEMPERATURE,
@@ -38,6 +39,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         ),
         vol.Required(CONF_API_KEY): cv.string,
         vol.Optional(CONF_TARGET_TEMPERATURE, default=DEFAULT_TARGET_TEMPERATURE): cv.positive_int,
+        vol.Optional(CONF_MAIN_CLIMATE_ENTITY): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="climate")
+        ),
     }
 )
 
