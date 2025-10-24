@@ -88,11 +88,22 @@ You can change settings after initial setup:
 
 1. Go to **Settings** → **Devices & Services**
 2. Find "AI Aircon Manager" and click **Configure**
-3. Update any of these settings:
-   - Target temperature
-   - Main aircon climate entity
-   - Main aircon fan entity
-4. Changes will reload the integration automatically
+3. Choose what you want to configure:
+   - **Change Settings**: Update target temperature, main climate entity, main fan entity
+   - **Manage Rooms**: Add or remove rooms
+
+#### Adding/Removing Rooms
+
+To add new rooms (e.g., after installing new zones or sensors):
+
+1. Go to **Settings** → **Devices & Services** → **AI Aircon Manager** → **Configure**
+2. Select **"Manage Rooms"**
+3. Choose an action:
+   - **Add new room**: Add a new room with its sensor and zone control
+   - **Remove existing room**: Remove a room from the system
+   - **Done**: Return to the main menu
+
+**Note**: The integration automatically reloads after adding or removing rooms, and new diagnostic sensors are created for newly added rooms.
 
 ## Usage
 

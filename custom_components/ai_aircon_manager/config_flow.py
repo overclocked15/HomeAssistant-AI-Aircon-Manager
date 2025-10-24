@@ -145,11 +145,21 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
         self.config_entry = config_entry
+        self._rooms = list(config_entry.data.get(CONF_ROOM_CONFIGS, []))
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Manage the options."""
+        """Manage the options - show menu."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["settings", "manage_rooms"],
+        )
+
+    async def async_step_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle settings configuration."""
         if user_input is not None:
             # Merge with existing data and update the config entry
             new_data = {**self.config_entry.data, **user_input}
@@ -161,7 +171,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
-            step_id="init",
+            step_id="settings",
             data_schema=vol.Schema(
                 {
                     vol.Optional(
@@ -181,6 +191,132 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         default=self.config_entry.data.get(CONF_MAIN_FAN_ENTITY),
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="fan")
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_manage_rooms(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage room configurations."""
+        if user_input is not None:
+            if user_input.get("action") == "add":
+                return await self.async_step_add_room()
+            elif user_input.get("action") == "remove":
+                return await self.async_step_remove_room()
+            elif user_input.get("action") == "done":
+                return self.async_create_entry(title="", data={})
+
+        current_rooms = self.config_entry.data.get(CONF_ROOM_CONFIGS, [])
+        room_list = "\n".join([f"- {room[CONF_ROOM_NAME]}" for room in current_rooms])
+
+        return self.async_show_form(
+            step_id="manage_rooms",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"label": "Add new room", "value": "add"},
+                                {"label": "Remove existing room", "value": "remove"},
+                                {"label": "Done", "value": "done"},
+                            ],
+                            mode=selector.SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+            description_placeholders={
+                "current_rooms": room_list or "None configured",
+            },
+        )
+
+    async def async_step_add_room(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Add a new room."""
+        if user_input is not None:
+            # Add the room
+            new_room = {
+                CONF_ROOM_NAME: user_input[CONF_ROOM_NAME],
+                CONF_TEMPERATURE_SENSOR: user_input[CONF_TEMPERATURE_SENSOR],
+                CONF_COVER_ENTITY: user_input[CONF_COVER_ENTITY],
+            }
+
+            current_rooms = list(self.config_entry.data.get(CONF_ROOM_CONFIGS, []))
+            current_rooms.append(new_room)
+
+            # Update the config entry
+            new_data = {**self.config_entry.data, CONF_ROOM_CONFIGS: current_rooms}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+
+            # Reload the integration
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+            return await self.async_step_manage_rooms()
+
+        return self.async_show_form(
+            step_id="add_room",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_ROOM_NAME): cv.string,
+                    vol.Required(CONF_TEMPERATURE_SENSOR): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor")
+                    ),
+                    vol.Required(CONF_COVER_ENTITY): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="cover")
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_remove_room(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Remove a room."""
+        current_rooms = self.config_entry.data.get(CONF_ROOM_CONFIGS, [])
+
+        if not current_rooms:
+            return await self.async_step_manage_rooms()
+
+        if user_input is not None:
+            room_to_remove = user_input["room_to_remove"]
+
+            # Remove the selected room
+            updated_rooms = [
+                room for room in current_rooms
+                if room[CONF_ROOM_NAME] != room_to_remove
+            ]
+
+            # Update the config entry
+            new_data = {**self.config_entry.data, CONF_ROOM_CONFIGS: updated_rooms}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+
+            # Reload the integration
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+            return await self.async_step_manage_rooms()
+
+        # Create list of rooms to choose from
+        room_options = [
+            {"label": room[CONF_ROOM_NAME], "value": room[CONF_ROOM_NAME]}
+            for room in current_rooms
+        ]
+
+        return self.async_show_form(
+            step_id="remove_room",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("room_to_remove"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=room_options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
                     ),
                 }
             ),

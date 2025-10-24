@@ -37,11 +37,42 @@
     "step": {
       "init": {
         "title": "AI Aircon Manager Options",
-        "description": "Configure integration settings. Changes require reload.",
+        "description": "Choose what you want to configure",
+        "menu_options": {
+          "settings": "Change Settings (temperature, entities)",
+          "manage_rooms": "Manage Rooms (add/remove rooms)"
+        }
+      },
+      "settings": {
+        "title": "Integration Settings",
+        "description": "Configure integration settings. Changes will reload the integration.",
         "data": {
           "target_temperature": "Target Temperature (°C)",
           "main_climate_entity": "Main Aircon Climate Entity (Optional - for monitoring)",
           "main_fan_entity": "Main Aircon Fan Entity (Optional - AI will control fan speed)"
+        }
+      },
+      "manage_rooms": {
+        "title": "Manage Rooms",
+        "description": "Current rooms:\n{current_rooms}\n\nChoose an action:",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "add_room": {
+        "title": "Add New Room",
+        "description": "Configure a new room with temperature sensor and zone fan control",
+        "data": {
+          "room_name": "Room Name",
+          "temperature_sensor": "Temperature Sensor",
+          "cover_entity": "Zone Fan Speed Control"
+        }
+      },
+      "remove_room": {
+        "title": "Remove Room",
+        "description": "Select a room to remove from the system",
+        "data": {
+          "room_to_remove": "Room to Remove"
         }
       }
     }
