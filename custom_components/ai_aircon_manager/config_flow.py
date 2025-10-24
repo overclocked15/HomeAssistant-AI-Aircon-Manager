@@ -22,6 +22,7 @@ from .const import (
     CONF_TEMPERATURE_SENSOR,
     CONF_COVER_ENTITY,
     CONF_MAIN_CLIMATE_ENTITY,
+    CONF_MAIN_FAN_ENTITY,
     AI_PROVIDER_CLAUDE,
     AI_PROVIDER_CHATGPT,
     DEFAULT_TARGET_TEMPERATURE,
@@ -41,6 +42,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_TARGET_TEMPERATURE, default=DEFAULT_TARGET_TEMPERATURE): cv.positive_int,
         vol.Optional(CONF_MAIN_CLIMATE_ENTITY): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="climate")
+        ),
+        vol.Optional(CONF_MAIN_FAN_ENTITY): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="fan")
         ),
     }
 )
@@ -147,7 +151,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage the options."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            # Merge with existing data and update the config entry
+            new_data = {**self.config_entry.data, **user_input}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            # Reload the integration to apply changes
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
             step_id="init",
@@ -159,6 +170,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                             CONF_TARGET_TEMPERATURE, DEFAULT_TARGET_TEMPERATURE
                         ),
                     ): cv.positive_int,
+                    vol.Optional(
+                        CONF_MAIN_CLIMATE_ENTITY,
+                        default=self.config_entry.data.get(CONF_MAIN_CLIMATE_ENTITY),
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="climate")
+                    ),
+                    vol.Optional(
+                        CONF_MAIN_FAN_ENTITY,
+                        default=self.config_entry.data.get(CONF_MAIN_FAN_ENTITY),
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="fan")
+                    ),
                 }
             ),
         )

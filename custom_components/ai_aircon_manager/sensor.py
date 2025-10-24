@@ -56,6 +56,10 @@ async def async_setup_entry(
     # Add last AI response sensor for debugging
     entities.append(AILastResponseSensor(coordinator, config_entry))
 
+    # Add main fan speed sensor if configured
+    if optimizer.main_fan_entity:
+        entities.append(MainFanSpeedSensor(coordinator, config_entry))
+
     async_add_entities(entities)
 
 
@@ -299,4 +303,58 @@ class AILastResponseSensor(CoordinatorEntity, SensorEntity):
         return {
             "raw_recommendations": self.coordinator.data.get("recommendations", {}),
             "ai_response_text": self.coordinator.data.get("ai_response_text", ""),
+        }
+
+
+class MainFanSpeedSensor(CoordinatorEntity, SensorEntity):
+    """Sensor showing the main aircon fan speed set by AI."""
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{config_entry.entry_id}_main_fan_speed"
+        self._attr_name = "Main Aircon Fan Speed"
+        self._attr_icon = "mdi:fan"
+
+    @property
+    def native_value(self) -> str:
+        """Return the main fan speed."""
+        if not self.coordinator.data:
+            return "unknown"
+
+        return self.coordinator.data.get("main_fan_speed", "unknown")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if not self.coordinator.data:
+            return {}
+
+        room_states = self.coordinator.data.get("room_states", {})
+
+        temps = [
+            state["current_temperature"]
+            for state in room_states.values()
+            if state["current_temperature"] is not None
+        ]
+
+        if not temps:
+            return {}
+
+        avg_temp = sum(temps) / len(temps)
+        max_temp = max(temps)
+        min_temp = min(temps)
+        temp_variance = max_temp - min_temp
+
+        target_temp = next(iter(room_states.values()))["target_temperature"] if room_states else None
+        avg_deviation = abs(avg_temp - target_temp) if target_temp else None
+
+        return {
+            "temperature_variance": round(temp_variance, 1),
+            "average_deviation_from_target": round(avg_deviation, 1) if avg_deviation else None,
+            "logic": (
+                "Low: variance ≤1°C and deviation ≤0.5°C (maintaining)\n"
+                "High: max deviation ≥3°C or variance ≥3°C (aggressive cooling)\n"
+                "Medium: All other cases (moderate cooling/equalizing)"
+            ),
         }

@@ -29,6 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         target_temperature=entry.data.get("target_temperature", 22),
         room_configs=entry.data.get("room_configs", {}),
         main_climate_entity=entry.data.get("main_climate_entity"),
+        main_fan_entity=entry.data.get("main_fan_entity"),
     )
 
     # Create coordinator for periodic updates

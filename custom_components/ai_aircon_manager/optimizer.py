@@ -21,6 +21,7 @@ class AirconOptimizer:
         target_temperature: float,
         room_configs: list[dict[str, Any]],
         main_climate_entity: str | None = None,
+        main_fan_entity: str | None = None,
     ) -> None:
         """Initialize the optimizer."""
         self.hass = hass
@@ -29,6 +30,7 @@ class AirconOptimizer:
         self.target_temperature = target_temperature
         self.room_configs = room_configs
         self.main_climate_entity = main_climate_entity
+        self.main_fan_entity = main_fan_entity
         self._ai_client = None
         self._last_ai_response = None
 
@@ -55,6 +57,11 @@ class AirconOptimizer:
         # Apply recommendations
         await self._apply_recommendations(recommendations)
 
+        # Determine and set main fan speed based on system state
+        main_fan_speed = None
+        if self.main_fan_entity:
+            main_fan_speed = await self._determine_and_set_main_fan_speed(room_states)
+
         # Get main climate entity state if configured
         main_climate_state = None
         if self.main_climate_entity:
@@ -73,6 +80,7 @@ class AirconOptimizer:
             "recommendations": recommendations,
             "ai_response_text": self._last_ai_response,
             "main_climate_state": main_climate_state,
+            "main_fan_speed": main_fan_speed,
         }
 
     async def _collect_room_states(self) -> dict[str, dict[str, Any]]:
@@ -240,3 +248,79 @@ Where recommended_fan_speed is an integer between 0 and 100.
                 cover_entity,
                 position,
             )
+
+    async def _determine_and_set_main_fan_speed(
+        self, room_states: dict[str, dict[str, Any]]
+    ) -> str:
+        """Determine and set the main aircon fan speed based on system state."""
+        # Calculate temperature variance and average deviation from target
+        temps = [
+            state["current_temperature"]
+            for state in room_states.values()
+            if state["current_temperature"] is not None
+        ]
+
+        if not temps:
+            return "medium"
+
+        avg_temp = sum(temps) / len(temps)
+        max_temp = max(temps)
+        min_temp = min(temps)
+        temp_variance = max_temp - min_temp
+
+        # Calculate average deviation from target
+        avg_deviation = abs(avg_temp - self.target_temperature)
+        max_deviation = max(
+            abs(temp - self.target_temperature)
+            for temp in temps
+        )
+
+        # Determine fan speed based on conditions
+        # Low: All rooms at or near target (maintaining)
+        # Medium: Some variation but not extreme (equalizing/gentle cooling)
+        # High: Significant deviation or high variance (aggressive cooling needed)
+
+        fan_speed = "medium"  # default
+
+        if temp_variance <= 1.0 and avg_deviation <= 0.5:
+            # Maintaining: All rooms close to target, minimal variance
+            fan_speed = "low"
+            _LOGGER.info(
+                "Main fan -> LOW: Maintaining (variance: %.1f°C, avg deviation: %.1f°C)",
+                temp_variance,
+                avg_deviation,
+            )
+        elif max_deviation >= 3.0 or temp_variance >= 3.0:
+            # Aggressive cooling: Large deviation or high variance
+            fan_speed = "high"
+            _LOGGER.info(
+                "Main fan -> HIGH: Aggressive cooling needed (max deviation: %.1f°C, variance: %.1f°C)",
+                max_deviation,
+                temp_variance,
+            )
+        else:
+            # Medium: Moderate cooling/equalizing
+            fan_speed = "medium"
+            _LOGGER.info(
+                "Main fan -> MEDIUM: Moderate cooling (avg deviation: %.1f°C, variance: %.1f°C)",
+                avg_deviation,
+                temp_variance,
+            )
+
+        # Set the fan speed
+        try:
+            await self.hass.services.async_call(
+                "fan",
+                "set_preset_mode",
+                {"entity_id": self.main_fan_entity, "preset_mode": fan_speed},
+                blocking=True,
+            )
+            _LOGGER.info(
+                "Set main fan (%s) to %s",
+                self.main_fan_entity,
+                fan_speed,
+            )
+        except Exception as e:
+            _LOGGER.error("Error setting main fan speed: %s", e)
+
+        return fan_speed

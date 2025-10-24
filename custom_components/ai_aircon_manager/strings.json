@@ -8,7 +8,8 @@
           "ai_provider": "AI Provider",
           "api_key": "API Key",
           "target_temperature": "Target Temperature (°C)",
-          "main_climate_entity": "Main Aircon Climate Entity (Optional - for monitoring main unit status)"
+          "main_climate_entity": "Main Aircon Climate Entity (Optional - for monitoring)",
+          "main_fan_entity": "Main Aircon Fan Entity (Optional - AI will control fan speed)"
         }
       },
       "add_room": {
@@ -36,8 +37,11 @@
     "step": {
       "init": {
         "title": "AI Aircon Manager Options",
+        "description": "Configure integration settings. Changes require reload.",
         "data": {
-          "target_temperature": "Target Temperature (°C)"
+          "target_temperature": "Target Temperature (°C)",
+          "main_climate_entity": "Main Aircon Climate Entity (Optional - for monitoring)",
+          "main_fan_entity": "Main Aircon Fan Entity (Optional - AI will control fan speed)"
         }
       }
     }

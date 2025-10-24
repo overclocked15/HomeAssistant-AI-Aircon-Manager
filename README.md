@@ -8,8 +8,10 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
 - **Multi-Room Support**: Configure multiple rooms with individual temperature sensors and zone controls
 - **Temperature Equalization**: Automatically balances temperatures across all rooms
 - **Smart Redistribution**: Increases fan speed in hot rooms, reduces in cold rooms to equalize
+- **Main Aircon Fan Control**: Automatically adjusts your main AC unit's fan speed (low/medium/high) based on system needs
+- **Comprehensive Diagnostics**: Detailed sensors for monitoring and troubleshooting
 - **Climate Entity**: Provides a climate entity to view overall system status and set target temperature
-- **Flexible Configuration**: Easy UI-based setup through Home Assistant config flow
+- **Flexible Configuration**: Easy UI-based setup through Home Assistant config flow with options to reconfigure
 
 ## How It Works
 
@@ -72,12 +74,25 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
    - **Step 1**:
      - Choose AI provider (Claude or ChatGPT) and enter API key
      - Set target temperature (e.g., 22°C)
-     - **(Optional)** Select your main aircon climate entity for monitoring
+     - **(Optional)** Select your main aircon climate entity for monitoring status
+     - **(Optional)** Select your main aircon fan entity for automatic fan speed control
    - **Step 2**: Add rooms one by one:
      - Room name (e.g., "Bedroom")
      - Temperature sensor entity
      - Zone fan speed control entity
    - Keep adding rooms until all configured
+
+### Reconfiguring Settings
+
+You can change settings after initial setup:
+
+1. Go to **Settings** → **Devices & Services**
+2. Find "AI Aircon Manager" and click **Configure**
+3. Update any of these settings:
+   - Target temperature
+   - Main aircon climate entity
+   - Main aircon fan entity
+4. Changes will reload the integration automatically
 
 ## Usage
 
@@ -116,9 +131,28 @@ The integration creates several diagnostic sensors for each room to help you tro
   - Attributes include temperature variance, min/max temps, average temp
 - `sensor.ai_last_response` - Shows the last AI response for debugging
   - Attributes include the raw AI response text for troubleshooting
+- `sensor.main_aircon_fan_speed` - *(Optional)* Shows current main fan speed set by AI
+  - Values: `low`, `medium`, `high`
+  - Only created if you configured a main fan entity
+  - Attributes show the logic used to determine speed
 - `binary_sensor.main_aircon_running` - *(Optional)* Shows if your main aircon is running
   - Only created if you configured a main climate entity
   - Attributes show HVAC mode, action, and temperatures
+
+### Main Aircon Fan Control Logic
+
+When you configure a main aircon fan entity, the integration automatically adjusts the fan speed based on system conditions:
+
+- **Low Fan Speed**: All rooms at or near target (≤1°C variance, ≤0.5°C average deviation)
+  - System is maintaining temperature - minimal airflow needed
+
+- **High Fan Speed**: Significant cooling needed (≥3°C max deviation OR ≥3°C variance)
+  - Aggressive cooling required to bring rooms to target
+
+- **Medium Fan Speed**: All other conditions
+  - Moderate cooling or temperature equalization in progress
+
+This ensures your main AC fan operates efficiently - running on low when just maintaining, and ramping up when aggressive cooling is needed.
 
 ### Automation Example
 
