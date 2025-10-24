@@ -74,8 +74,10 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
    - **Step 1**:
      - Choose AI provider (Claude or ChatGPT) and enter API key
      - Set target temperature (e.g., 22°C)
-     - **(Optional)** Select your main aircon climate entity for monitoring status
-     - **(Optional)** Select your main aircon fan entity for automatic fan speed control
+     - **(Optional)** Main Aircon Climate Entity - for monitoring and auto on/off control
+     - **(Optional)** Main AC Fan Control - can be the same climate entity OR a separate fan entity
+       - If your climate entity has fan modes (low/medium/high), use that
+       - AI will automatically detect and use `climate.set_fan_mode` or `fan.set_preset_mode`
    - **Step 2**: Add rooms one by one:
      - Room name (e.g., "Bedroom")
      - Temperature sensor entity

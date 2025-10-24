@@ -57,7 +57,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
             selector.EntitySelectorConfig(domain="climate")
         ),
         vol.Optional(CONF_MAIN_FAN_ENTITY): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="fan")
+            selector.EntitySelectorConfig(domain=["fan", "climate"])
         ),
     }
 )
@@ -242,7 +242,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_MAIN_FAN_ENTITY,
                         default=self.config_entry.data.get(CONF_MAIN_FAN_ENTITY),
                     ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="fan")
+                        selector.EntitySelectorConfig(domain=["fan", "climate"])
                     ),
                     vol.Optional(
                         CONF_ENABLE_NOTIFICATIONS,

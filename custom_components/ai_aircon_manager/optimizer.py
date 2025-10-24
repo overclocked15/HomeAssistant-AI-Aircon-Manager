@@ -372,12 +372,23 @@ Where recommended_fan_speed is an integer between 0 and 100.
 
         # Set the fan speed
         try:
-            await self.hass.services.async_call(
-                "fan",
-                "set_preset_mode",
-                {"entity_id": self.main_fan_entity, "preset_mode": fan_speed},
-                blocking=True,
-            )
+            # Check if this is a climate entity or fan entity
+            if self.main_fan_entity.startswith("climate."):
+                # Use climate.set_fan_mode for climate entities
+                await self.hass.services.async_call(
+                    "climate",
+                    "set_fan_mode",
+                    {"entity_id": self.main_fan_entity, "fan_mode": fan_speed},
+                    blocking=True,
+                )
+            else:
+                # Use fan.set_preset_mode for fan entities
+                await self.hass.services.async_call(
+                    "fan",
+                    "set_preset_mode",
+                    {"entity_id": self.main_fan_entity, "preset_mode": fan_speed},
+                    blocking=True,
+                )
             _LOGGER.info(
                 "Set main fan (%s) to %s",
                 self.main_fan_entity,
