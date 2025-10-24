@@ -22,6 +22,12 @@ class AirconOptimizer:
         room_configs: list[dict[str, Any]],
         main_climate_entity: str | None = None,
         main_fan_entity: str | None = None,
+        temperature_deadband: float = 0.5,
+        hvac_mode: str = "cool",
+        auto_control_main_ac: bool = False,
+        enable_notifications: bool = True,
+        room_overrides: dict[str, Any] | None = None,
+        config_entry: Any | None = None,
     ) -> None:
         """Initialize the optimizer."""
         self.hass = hass
@@ -31,8 +37,16 @@ class AirconOptimizer:
         self.room_configs = room_configs
         self.main_climate_entity = main_climate_entity
         self.main_fan_entity = main_fan_entity
+        self.temperature_deadband = temperature_deadband
+        self.hvac_mode = hvac_mode
+        self.auto_control_main_ac = auto_control_main_ac
+        self.enable_notifications = enable_notifications
+        self.room_overrides = room_overrides or {}
+        self.config_entry = config_entry
         self._ai_client = None
         self._last_ai_response = None
+        self._last_error = None
+        self._error_count = 0
 
     async def async_setup(self) -> None:
         """Set up the AI client."""
@@ -51,19 +65,9 @@ class AirconOptimizer:
         # Collect current state of all rooms
         room_states = await self._collect_room_states()
 
-        # Get AI recommendations
-        recommendations = await self._get_ai_recommendations(room_states)
-
-        # Apply recommendations
-        await self._apply_recommendations(recommendations)
-
-        # Determine and set main fan speed based on system state
-        main_fan_speed = None
-        if self.main_fan_entity:
-            main_fan_speed = await self._determine_and_set_main_fan_speed(room_states)
-
         # Get main climate entity state if configured
         main_climate_state = None
+        main_ac_running = False
         if self.main_climate_entity:
             climate_state = self.hass.states.get(self.main_climate_entity)
             if climate_state:
@@ -74,6 +78,37 @@ class AirconOptimizer:
                     "hvac_mode": climate_state.attributes.get("hvac_mode"),
                     "hvac_action": climate_state.attributes.get("hvac_action"),
                 }
+                # Check if AC is actually running
+                hvac_action = climate_state.attributes.get("hvac_action")
+                hvac_mode = climate_state.attributes.get("hvac_mode")
+                main_ac_running = (
+                    hvac_action in ["cooling", "heating"]
+                    or (hvac_mode and hvac_mode not in ["off", "unavailable"])
+                )
+
+        # Determine if we need the AC on
+        needs_ac = await self._check_if_ac_needed(room_states)
+
+        # Auto-control main AC if enabled
+        if self.auto_control_main_ac and self.main_climate_entity:
+            await self._control_main_ac(needs_ac, main_climate_state)
+
+        # Only optimize if AC is running (or we don't have a main climate entity to check)
+        recommendations = {}
+        main_fan_speed = None
+
+        if not self.main_climate_entity or main_ac_running:
+            # Get AI recommendations
+            recommendations = await self._get_ai_recommendations(room_states)
+
+            # Apply recommendations (respecting room overrides)
+            await self._apply_recommendations(recommendations)
+
+            # Determine and set main fan speed based on system state
+            if self.main_fan_entity:
+                main_fan_speed = await self._determine_and_set_main_fan_speed(room_states)
+        else:
+            _LOGGER.info("Main AC is not running - skipping optimization")
 
         return {
             "room_states": room_states,
@@ -81,6 +116,10 @@ class AirconOptimizer:
             "ai_response_text": self._last_ai_response,
             "main_climate_state": main_climate_state,
             "main_fan_speed": main_fan_speed,
+            "main_ac_running": main_ac_running,
+            "needs_ac": needs_ac,
+            "last_error": self._last_error,
+            "error_count": self._error_count,
         }
 
     async def _collect_room_states(self) -> dict[str, dict[str, Any]]:
@@ -151,9 +190,14 @@ class AirconOptimizer:
         self, room_states: dict[str, dict[str, Any]]
     ) -> str:
         """Build the prompt for the AI."""
-        prompt = f"""You are an intelligent HVAC management system. I have a central air conditioning system with individual zone fan speed controls for each room.
+        system_type = "heating" if self.hvac_mode == "heat" else "cooling"
+        action_hot = "reduce heating" if self.hvac_mode == "heat" else "cool them down"
+        action_cold = "heat them up" if self.hvac_mode == "heat" else "reduce cooling"
+
+        prompt = f"""You are an intelligent HVAC management system. I have a central HVAC system in {system_type} mode with individual zone fan speed controls for each room.
 
 Target temperature for all rooms: {self.target_temperature}°C
+Temperature deadband: {self.temperature_deadband}°C (rooms within this range are considered at target)
 
 Current room states:
 """
@@ -164,21 +208,21 @@ Room: {room_name}
   - Current zone fan speed: {state['cover_position']}% (0% = off, 100% = full speed)
 """
 
-        prompt += """
-Your goal is to manage the aircon system so that ALL rooms reach and maintain the target temperature.
+        prompt += f"""
+Your goal is to manage the HVAC system so that ALL rooms reach and maintain the target temperature.
 
 How the system works:
 - Each room has an adjustable zone fan speed (0-100%)
-- Higher fan speed = more airflow = faster cooling for that room
-- Lower fan speed = less airflow = slower cooling for that room
+- Higher fan speed = more airflow = faster {system_type} for that room
+- Lower fan speed = less airflow = slower {system_type} for that room
 
-Management strategy:
+Management strategy for {system_type.upper()} MODE:
 1. EQUALIZING PHASE (when rooms have different temperatures):
-   - Rooms TOO HOT (above target): Set zone fan to HIGH (75-100%) to cool them down faster
-   - Rooms TOO COLD (below target): Set zone fan to LOW (25-50%) to reduce cooling in those areas
-   - This redistributes the cooling effect to equalize temperatures across the house
+   - Rooms that need MORE {system_type}: Set zone fan to HIGH (75-100%) to {action_hot} faster
+   - Rooms that need LESS {system_type}: Set zone fan to LOW (25-50%) to {action_cold}
+   - This redistributes the {system_type} effect to equalize temperatures across the house
 
-2. MAINTENANCE PHASE (when all rooms are at or near target):
+2. MAINTENANCE PHASE (when all rooms are within deadband of target):
    - Set all zones to BALANCED levels (around 70-80%) to maintain temperature
    - Make small adjustments (±5-10%) based on minor temperature variations
 
@@ -187,6 +231,7 @@ Key principles:
 - Larger temperature differences warrant larger fan speed adjustments
 - Never set all zones below 25% as this wastes energy
 - Goal is whole-home temperature equilibrium at target
+- Consider the deadband: rooms within ±{self.temperature_deadband}°C are acceptable
 
 Respond ONLY with a JSON object in this exact format (no other text):
 {
@@ -223,8 +268,17 @@ Where recommended_fan_speed is an integer between 0 and 100.
         return {}
 
     async def _apply_recommendations(self, recommendations: dict[str, int]) -> None:
-        """Apply the recommended cover positions."""
+        """Apply the recommended cover positions (respecting room overrides)."""
         for room_name, position in recommendations.items():
+            # Check if this room is disabled via override
+            room_override = self.room_overrides.get(f"{room_name}_enabled")
+            if room_override is False:
+                _LOGGER.info(
+                    "Skipping %s - AI control disabled via override",
+                    room_name,
+                )
+                continue
+
             # Find the cover entity for this room
             room_config = next(
                 (r for r in self.room_configs if r["room_name"] == room_name), None
@@ -235,19 +289,28 @@ Where recommended_fan_speed is an integer between 0 and 100.
             cover_entity = room_config["cover_entity"]
 
             # Set the cover position
-            await self.hass.services.async_call(
-                "cover",
-                "set_cover_position",
-                {"entity_id": cover_entity, "position": position},
-                blocking=True,
-            )
+            try:
+                await self.hass.services.async_call(
+                    "cover",
+                    "set_cover_position",
+                    {"entity_id": cover_entity, "position": position},
+                    blocking=True,
+                )
 
-            _LOGGER.info(
-                "Set cover position for %s (%s) to %d%%",
-                room_name,
-                cover_entity,
-                position,
-            )
+                _LOGGER.info(
+                    "Set cover position for %s (%s) to %d%%",
+                    room_name,
+                    cover_entity,
+                    position,
+                )
+            except Exception as e:
+                _LOGGER.error("Error setting cover position for %s: %s", room_name, e)
+                self._last_error = f"Cover Control Error ({room_name}): {e}"
+                self._error_count += 1
+                await self._send_notification(
+                    "Cover Control Error",
+                    f"Failed to set fan speed for {room_name}: {e}"
+                )
 
     async def _determine_and_set_main_fan_speed(
         self, room_states: dict[str, dict[str, Any]]
@@ -322,5 +385,94 @@ Where recommended_fan_speed is an integer between 0 and 100.
             )
         except Exception as e:
             _LOGGER.error("Error setting main fan speed: %s", e)
+            await self._send_notification("Main Fan Error", f"Failed to set main fan speed: {e}")
 
         return fan_speed
+
+    async def _check_if_ac_needed(self, room_states: dict[str, dict[str, Any]]) -> bool:
+        """Check if AC is needed based on room temperatures and deadband."""
+        temps = [
+            state["current_temperature"]
+            for state in room_states.values()
+            if state["current_temperature"] is not None
+        ]
+
+        if not temps:
+            return False
+
+        avg_temp = sum(temps) / len(temps)
+
+        # Use deadband to determine if AC is needed
+        # For cooling: if avg temp > target + deadband, need cooling
+        # For heating: if avg temp < target - deadband, need heating
+        if self.hvac_mode == "cool":
+            return avg_temp > (self.target_temperature + self.temperature_deadband)
+        elif self.hvac_mode == "heat":
+            return avg_temp < (self.target_temperature - self.temperature_deadband)
+        else:  # auto mode
+            # Check if we're significantly off target in either direction
+            return abs(avg_temp - self.target_temperature) > self.temperature_deadband
+
+    async def _control_main_ac(
+        self, needs_ac: bool, main_climate_state: dict[str, Any] | None
+    ) -> None:
+        """Control the main AC on/off based on need."""
+        if not main_climate_state:
+            return
+
+        current_mode = main_climate_state.get("hvac_mode")
+
+        try:
+            if needs_ac:
+                # Turn on AC if it's off
+                if current_mode == "off":
+                    target_mode = self.hvac_mode if self.hvac_mode != "auto" else "cool"
+                    _LOGGER.info("Turning ON main AC (mode: %s)", target_mode)
+                    await self.hass.services.async_call(
+                        "climate",
+                        "set_hvac_mode",
+                        {"entity_id": self.main_climate_entity, "hvac_mode": target_mode},
+                        blocking=True,
+                    )
+                    await self._send_notification(
+                        "AC Turned On",
+                        f"AI turned on the main AC in {target_mode} mode"
+                    )
+            else:
+                # Turn off AC if it's on
+                if current_mode and current_mode != "off":
+                    _LOGGER.info("Turning OFF main AC (all rooms at target)")
+                    await self.hass.services.async_call(
+                        "climate",
+                        "set_hvac_mode",
+                        {"entity_id": self.main_climate_entity, "hvac_mode": "off"},
+                        blocking=True,
+                    )
+                    await self._send_notification(
+                        "AC Turned Off",
+                        "AI turned off the main AC (all rooms at target temperature)"
+                    )
+        except Exception as e:
+            _LOGGER.error("Error controlling main AC: %s", e)
+            self._last_error = f"AC Control Error: {e}"
+            self._error_count += 1
+            await self._send_notification("AC Control Error", f"Failed to control main AC: {e}")
+
+    async def _send_notification(self, title: str, message: str) -> None:
+        """Send a persistent notification to Home Assistant."""
+        if not self.enable_notifications:
+            return
+
+        try:
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": f"AI Aircon Manager: {title}",
+                    "message": message,
+                    "notification_id": f"ai_aircon_manager_{title.lower().replace(' ', '_')}",
+                },
+                blocking=False,
+            )
+        except Exception as e:
+            _LOGGER.error("Error sending notification: %s", e)

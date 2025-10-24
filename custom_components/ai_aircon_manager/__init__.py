@@ -9,7 +9,14 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_TEMPERATURE_DEADBAND,
+    DEFAULT_HVAC_MODE,
+    DEFAULT_AUTO_CONTROL_MAIN_AC,
+    DEFAULT_ENABLE_NOTIFICATIONS,
+)
 from .optimizer import AirconOptimizer
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,7 +37,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         room_configs=entry.data.get("room_configs", {}),
         main_climate_entity=entry.data.get("main_climate_entity"),
         main_fan_entity=entry.data.get("main_fan_entity"),
+        temperature_deadband=entry.data.get("temperature_deadband", DEFAULT_TEMPERATURE_DEADBAND),
+        hvac_mode=entry.data.get("hvac_mode", DEFAULT_HVAC_MODE),
+        auto_control_main_ac=entry.data.get("auto_control_main_ac", DEFAULT_AUTO_CONTROL_MAIN_AC),
+        enable_notifications=entry.data.get("enable_notifications", DEFAULT_ENABLE_NOTIFICATIONS),
+        room_overrides=entry.data.get("room_overrides", {}),
+        config_entry=entry,
     )
+
+    # Get update interval from config
+    update_interval = entry.data.get("update_interval", DEFAULT_UPDATE_INTERVAL)
 
     # Create coordinator for periodic updates
     coordinator = DataUpdateCoordinator(
@@ -38,7 +54,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER,
         name=DOMAIN,
         update_method=optimizer.async_optimize,
-        update_interval=timedelta(minutes=5),
+        update_interval=timedelta(minutes=update_interval),
     )
 
     # Store the optimizer and coordinator

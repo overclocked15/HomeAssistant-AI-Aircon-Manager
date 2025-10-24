@@ -39,8 +39,9 @@
         "title": "AI Aircon Manager Options",
         "description": "Choose what you want to configure",
         "menu_options": {
-          "settings": "Change Settings (temperature, entities)",
-          "manage_rooms": "Manage Rooms (add/remove rooms)"
+          "settings": "Change Settings (temperature, entities, modes)",
+          "manage_rooms": "Manage Rooms (add/remove rooms)",
+          "room_overrides": "Room Overrides (enable/disable AI control per room)"
         }
       },
       "settings": {
@@ -48,8 +49,13 @@
         "description": "Configure integration settings. Changes will reload the integration.",
         "data": {
           "target_temperature": "Target Temperature (°C)",
-          "main_climate_entity": "Main Aircon Climate Entity (Optional - for monitoring)",
-          "main_fan_entity": "Main Aircon Fan Entity (Optional - AI will control fan speed)"
+          "temperature_deadband": "Temperature Deadband (°C) - acceptable range from target",
+          "update_interval": "Update Interval (minutes)",
+          "hvac_mode": "HVAC Mode",
+          "main_climate_entity": "Main Aircon Climate Entity (Optional - for monitoring/control)",
+          "auto_control_main_ac": "Automatically turn main AC on/off based on need",
+          "main_fan_entity": "Main Aircon Fan Entity (Optional - AI will control fan speed)",
+          "enable_notifications": "Enable notifications for important events"
         }
       },
       "manage_rooms": {
@@ -74,6 +80,11 @@
         "data": {
           "room_to_remove": "Room to Remove"
         }
+      },
+      "room_overrides": {
+        "title": "Room Overrides",
+        "description": "Enable or disable AI control for each room. Disabled rooms will not have their fan speeds adjusted by the AI. You have {room_count} room(s) configured.\n\nCheck the box to ENABLE AI control, uncheck to DISABLE.",
+        "data": {}
       }
     }
   }

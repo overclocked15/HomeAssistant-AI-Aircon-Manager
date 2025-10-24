@@ -23,9 +23,22 @@ from .const import (
     CONF_COVER_ENTITY,
     CONF_MAIN_CLIMATE_ENTITY,
     CONF_MAIN_FAN_ENTITY,
+    CONF_UPDATE_INTERVAL,
+    CONF_TEMPERATURE_DEADBAND,
+    CONF_HVAC_MODE,
+    CONF_AUTO_CONTROL_MAIN_AC,
+    CONF_ENABLE_NOTIFICATIONS,
     AI_PROVIDER_CLAUDE,
     AI_PROVIDER_CHATGPT,
+    HVAC_MODE_COOL,
+    HVAC_MODE_HEAT,
+    HVAC_MODE_AUTO,
     DEFAULT_TARGET_TEMPERATURE,
+    DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_TEMPERATURE_DEADBAND,
+    DEFAULT_HVAC_MODE,
+    DEFAULT_AUTO_CONTROL_MAIN_AC,
+    DEFAULT_ENABLE_NOTIFICATIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -153,7 +166,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options - show menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["settings", "manage_rooms"],
+            menu_options=["settings", "manage_rooms", "room_overrides"],
         )
 
     async def async_step_settings(
@@ -181,17 +194,62 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         ),
                     ): cv.positive_int,
                     vol.Optional(
+                        CONF_TEMPERATURE_DEADBAND,
+                        default=self.config_entry.data.get(
+                            CONF_TEMPERATURE_DEADBAND, DEFAULT_TEMPERATURE_DEADBAND
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.1, max=5.0, step=0.1, mode=selector.NumberSelectorMode.BOX
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_UPDATE_INTERVAL,
+                        default=self.config_entry.data.get(
+                            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1, max=60, step=1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="minutes"
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_HVAC_MODE,
+                        default=self.config_entry.data.get(CONF_HVAC_MODE, DEFAULT_HVAC_MODE),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"label": "Cooling", "value": HVAC_MODE_COOL},
+                                {"label": "Heating", "value": HVAC_MODE_HEAT},
+                                {"label": "Auto (based on main climate)", "value": HVAC_MODE_AUTO},
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Optional(
                         CONF_MAIN_CLIMATE_ENTITY,
                         default=self.config_entry.data.get(CONF_MAIN_CLIMATE_ENTITY),
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="climate")
                     ),
                     vol.Optional(
+                        CONF_AUTO_CONTROL_MAIN_AC,
+                        default=self.config_entry.data.get(
+                            CONF_AUTO_CONTROL_MAIN_AC, DEFAULT_AUTO_CONTROL_MAIN_AC
+                        ),
+                    ): cv.boolean,
+                    vol.Optional(
                         CONF_MAIN_FAN_ENTITY,
                         default=self.config_entry.data.get(CONF_MAIN_FAN_ENTITY),
                     ): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="fan")
                     ),
+                    vol.Optional(
+                        CONF_ENABLE_NOTIFICATIONS,
+                        default=self.config_entry.data.get(
+                            CONF_ENABLE_NOTIFICATIONS, DEFAULT_ENABLE_NOTIFICATIONS
+                        ),
+                    ): cv.boolean,
                 }
             ),
         )
@@ -320,4 +378,41 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                 }
             ),
+        )
+
+    async def async_step_room_overrides(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage room overrides (enable/disable AI control per room)."""
+        current_rooms = self.config_entry.data.get(CONF_ROOM_CONFIGS, [])
+        current_overrides = self.config_entry.data.get(CONF_ROOM_OVERRIDES, {})
+
+        if user_input is not None:
+            # Update room overrides
+            new_data = {**self.config_entry.data, CONF_ROOM_OVERRIDES: user_input}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            # Reload the integration
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        # Build schema with a checkbox for each room
+        schema_dict = {}
+        for room in current_rooms:
+            room_name = room[CONF_ROOM_NAME]
+            # Default to enabled (not overridden) if not in overrides
+            is_enabled = current_overrides.get(room_name, {}).get("enabled", True)
+            schema_dict[vol.Optional(f"{room_name}_enabled", default=is_enabled)] = cv.boolean
+
+        if not schema_dict:
+            # No rooms configured
+            return await self.async_step_init()
+
+        return self.async_show_form(
+            step_id="room_overrides",
+            data_schema=vol.Schema(schema_dict),
+            description_placeholders={
+                "room_count": str(len(current_rooms)),
+            },
         )

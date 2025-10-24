@@ -13,11 +13,25 @@ CONF_COVER_ENTITY = "cover_entity"
 CONF_MAIN_CLIMATE_ENTITY = "main_climate_entity"
 CONF_MAIN_FAN_ENTITY = "main_fan_entity"
 CONF_UPDATE_INTERVAL = "update_interval"
+CONF_TEMPERATURE_DEADBAND = "temperature_deadband"
+CONF_HVAC_MODE = "hvac_mode"
+CONF_AUTO_CONTROL_MAIN_AC = "auto_control_main_ac"
+CONF_ENABLE_NOTIFICATIONS = "enable_notifications"
+CONF_ROOM_OVERRIDES = "room_overrides"
 
 # AI Providers
 AI_PROVIDER_CLAUDE = "claude"
 AI_PROVIDER_CHATGPT = "chatgpt"
 
+# HVAC Modes
+HVAC_MODE_COOL = "cool"
+HVAC_MODE_HEAT = "heat"
+HVAC_MODE_AUTO = "auto"
+
 # Default values
 DEFAULT_TARGET_TEMPERATURE = 22
 DEFAULT_UPDATE_INTERVAL = 5  # minutes
+DEFAULT_TEMPERATURE_DEADBAND = 0.5  # degrees C
+DEFAULT_HVAC_MODE = HVAC_MODE_COOL
+DEFAULT_AUTO_CONTROL_MAIN_AC = False
+DEFAULT_ENABLE_NOTIFICATIONS = True
