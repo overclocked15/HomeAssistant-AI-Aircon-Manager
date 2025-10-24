@@ -1,0 +1,1100 @@
+title: Home
+views:
+  - title: Home
+    path: home
+    icon: mdi:home
+    theme: Material You
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Climate
+          - type: custom:mushroom-climate-card
+            entity: climate.ac
+            show_temperature_control: true
+            hvac_modes:
+              - heat_cool
+              - cool
+              - heat
+              - dry
+              - fan_only
+              - 'off'
+            layout: horizontal
+            fill_container: true
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: Low
+                entity: climate.ac
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: climate.set_fan_mode
+                  service_data:
+                    entity_id: climate.ac
+                    fan_mode: low
+                styles:
+                  card:
+                    - height: 40px
+                    - border: 0px solid
+                    - border-color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'low' ? 'var(--primary-color)' : 'var(--divider-color)';
+                        ]]]
+                    - background: |
+                        [[[
+                          return entity.attributes.fan_mode === 'low' ? 'var(--primary-color)' : 'transparent';
+                        ]]]
+                    - border-radius: 6px
+                  name:
+                    - font-size: 12px
+                    - color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'low' ? 'white' : 'var(--primary-text-color)';
+                        ]]]
+              - type: custom:button-card
+                name: Med
+                entity: climate.ac
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: climate.set_fan_mode
+                  service_data:
+                    entity_id: climate.ac
+                    fan_mode: medium
+                styles:
+                  card:
+                    - height: 40px
+                    - border: 0px solid
+                    - border-color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'medium' ? 'var(--primary-color)' : 'var(--divider-color)';
+                        ]]]
+                    - background: |
+                        [[[
+                          return entity.attributes.fan_mode === 'medium' ? 'var(--primary-color)' : 'transparent';
+                        ]]]
+                    - border-radius: 6px
+                  name:
+                    - font-size: 12px
+                    - color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'medium' ? 'white' : 'var(--primary-text-color)';
+                        ]]]
+              - type: custom:button-card
+                name: High
+                entity: climate.ac
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: climate.set_fan_mode
+                  service_data:
+                    entity_id: climate.ac
+                    fan_mode: high
+                styles:
+                  card:
+                    - height: 40px
+                    - border: 0px solid
+                    - border-color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'high' ? 'var(--primary-color)' : 'var(--divider-color)';
+                        ]]]
+                    - background: |
+                        [[[
+                          return entity.attributes.fan_mode === 'high' ? 'var(--primary-color)' : 'transparent';
+                        ]]]
+                    - border-radius: 6px
+                  name:
+                    - font-size: 12px
+                    - color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'high' ? 'white' : 'var(--primary-text-color)';
+                        ]]]
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_master
+                name: Master
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_office
+                name: Office
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_living
+                name: Living
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_bedroom_3
+                name: Bedroom 3
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_bedroom_4
+                name: Bedroom 4/Medical
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_media_room
+                name: Media
+                show_position_control: true
+                layout: vertical
+          - type: heading
+            icon: ''
+            heading: Temperature
+            heading_style: title
+          - type: grid
+            cards:
+              - graph: line
+                type: sensor
+                entity: sensor.hub_2_e6c5
+                detail: 1
+                name: Living Room
+              - graph: line
+                type: sensor
+                entity: sensor.medical_supplies_cupboard_temperature
+                detail: 1
+                name: Medical
+            grid_options:
+              rows: 3
+              columns: full
+        column_span: 1
+      - type: grid
+        cards:
+          - type: heading
+            heading: Security
+          - type: custom:mushroom-entity-card
+            entity: cover.smart_garage_door_24090470488066610701c4e7ae0ac4b7_garage
+            name: Garage Door
+            icon: mdi:garage
+            tap_action:
+              action: toggle
+            hold_action:
+              action: more-info
+            layout: horizontal
+            fill_container: true
+          - type: picture-entity
+            entity: camera.g4_doorbell_pro_high_resolution_channel
+            name: Front Door
+            show_state: false
+            show_name: true
+            camera_view: live
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: binary_sensor.front_door_contact
+                name: Back Door
+                icon: mdi:door
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: binary_sensor.0x6cfd22fffeb5a0cc_contact
+                name: Bedroom Window
+                icon: mdi:window-closed
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: binary_sensor.0x6cfd22fffeb59990_contact
+                name: Living Window
+                icon: mdi:window-closed
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: binary_sensor.0x6cfd22fffeb5bad4_contact
+                name: Office Window
+                icon: mdi:window-closed
+                tap_action:
+                  action: more-info
+        column_span: 1
+      - type: grid
+        cards:
+          - type: heading
+            heading: Solar & Battery
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_solar_power
+                name: Solar Power
+                icon: mdi:solar-power
+                icon_color: amber
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_state_of_charge
+                name: Battery SOC
+                icon: mdi:battery-high
+                icon_color: green
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_battery_energy
+                name: Battery Energy
+                icon: mdi:battery-charging
+                icon_color: green
+                primary_info: name
+                secondary_info: state
+          - type: grid
+            columns: 4
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_home_demand
+                name: Home Load
+                icon: mdi:home-lightning-bolt
+                icon_color: blue
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_grid_import
+                name: Grid Import
+                icon: mdi:transmission-tower-import
+                icon_color: red
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_grid_export
+                name: Grid Export
+                icon: mdi:transmission-tower-export
+                icon_color: green
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_grid_status
+                name: Grid Status
+                icon: mdi:transmission-tower
+                primary_info: name
+                secondary_info: state
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_charge_power
+                name: Battery Charging
+                icon: mdi:battery-arrow-up
+                icon_color: green
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_discharge_power
+                name: Battery Discharging
+                icon: mdi:battery-arrow-down
+                icon_color: orange
+                primary_info: name
+                secondary_info: state
+          - type: custom:mini-graph-card
+            entities:
+              - entity: sensor.x1_h_3_68_6_k_s_solar_power
+                name: Solar
+                color: '#FFA726'
+              - entity: sensor.x1_h_3_68_6_k_s_home_demand
+                name: Home
+                color: '#42A5F5'
+              - entity: sensor.x1_h_3_68_6_k_s_grid_import
+                name: Import
+                color: '#EF5350'
+              - entity: sensor.x1_h_3_68_6_k_s_grid_export
+                name: Export
+                color: '#66BB6A'
+            hours_to_show: 24
+            points_per_hour: 4
+            line_width: 2
+            font_size: 75
+            animate: true
+            show:
+              labels: true
+              points: false
+              legend: true
+      - type: grid
+        cards:
+          - type: heading
+            heading: Lights
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-light-card
+                entity: light.hallway_lamp
+                use_light_color: true
+                show_brightness_control: true
+                layout: vertical
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-light-card
+                entity: light.nicks_hue_go
+                name: Hue Go
+                use_light_color: true
+                show_brightness_control: true
+                show_color_control: true
+                layout: vertical
+              - type: custom:mushroom-light-card
+                entity: light.0x001788010cbfd3c1
+                use_light_color: true
+                show_brightness_control: true
+                layout: vertical
+                show_color_control: true
+      - type: grid
+        cards:
+          - type: heading
+            heading: Media
+          - type: custom:mushroom-media-player-card
+            entity: media_player.living_room
+            use_media_info: true
+            show_volume_level: true
+            layout: horizontal
+            fill_container: true
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-media-player-card
+                entity: media_player.kitchen
+                use_media_info: true
+                show_volume_level: true
+                layout: vertical
+              - type: custom:mushroom-media-player-card
+                entity: media_player.jbl_bar_500
+                name: JBL Bar
+                use_media_info: true
+                show_volume_level: true
+                layout: vertical
+              - type: custom:mushroom-media-player-card
+                entity: media_player.nicks_study_tv
+                name: Study TV
+                use_media_info: true
+                show_volume_level: true
+                layout: vertical
+              - type: custom:mushroom-media-player-card
+                entity: media_player.living_room_speaker
+                name: Living Speaker
+                use_media_info: true
+                show_volume_level: true
+                layout: vertical
+      - type: grid
+        cards:
+          - type: heading
+            heading: Cleaning
+          - type: custom:mushroom-vacuum-card
+            entity: vacuum.roborock_q7_max
+            commands:
+              - start_pause
+              - stop
+              - return_home
+            layout: horizontal
+            fill_container: true
+      - type: grid
+        cards:
+          - type: heading
+            heading: Energy
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.washing_machine_today_s_consumption_cost
+                name: Washing Machine
+                icon: mdi:washing-machine
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.dryer_today_s_consumption_cost
+                name: Dryer
+                icon: mdi:tumble-dryer
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.dishwasher_today_s_consumption_cost
+                name: Dishwasher
+                icon: mdi:dishwasher
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.coffee_machine_today_s_consumption_cost
+                name: Coffee
+                icon: mdi:coffee-maker
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.3d_printer_today_s_consumption_cost
+                name: 3D Printer
+                icon: mdi:printer-3d
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.microwave_today_s_consumption_cost
+                name: Microwave
+                icon: mdi:microwave
+                primary_info: name
+                secondary_info: state
+      - type: grid
+        cards:
+          - type: heading
+            heading: System
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.myups_battery_charge
+                name: UPS Battery
+                icon: mdi:battery
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.myups_load
+                name: UPS Load
+                icon: mdi:transmission-tower
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.nicks_home_cpu_utilization_2
+                name: UniFi CPU
+                icon: mdi:cpu-64-bit
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.nicks_home_memory_utilization_2
+                name: UniFi Memory
+                icon: mdi:memory
+                primary_info: name
+                secondary_info: state
+  - title: Personal
+    path: personal
+    icon: mdi:account
+    theme: Material You
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Status
+          - type: custom:mushroom-person-card
+            entity: person.nicholas_hamann
+            layout: horizontal
+            fill_container: true
+      - type: grid
+        cards:
+          - type: heading
+            heading: Devices
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.nicks_iphone_battery_level
+                name: iPhone Battery
+                icon: mdi:battery
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.nicks_iphone_watch_battery_level
+                name: Watch Battery
+                icon: mdi:watch
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.pixel_8_pro_battery_level
+                name: Pixel Battery
+                icon: mdi:battery
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.ipad_battery_level
+                name: iPad Battery
+                icon: mdi:battery
+                primary_info: name
+                secondary_info: state
+      - type: grid
+        cards:
+          - type: heading
+            heading: Activity
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.nicks_iphone_steps
+                name: Steps
+                icon: mdi:walk
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.nicks_iphone_distance
+                name: Distance
+                icon: mdi:map-marker-distance
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.nicks_iphone_floors_ascended
+                name: Floors Up
+                icon: mdi:stairs-up
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.nicks_iphone_floors_descended
+                name: Floors Down
+                icon: mdi:stairs-down
+                primary_info: name
+                secondary_info: state
+  - title: Weather
+    path: weather
+    icon: mdi:weather-partly-cloudy
+    theme: Material You
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Current Weather
+          - type: weather-forecast
+            entity: weather.home_2
+            show_forecast: true
+            forecast_type: daily
+      - type: grid
+        cards:
+          - type: heading
+            heading: Sun
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.sun_next_rising
+                name: Sunrise
+                icon: mdi:weather-sunset-up
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.sun_next_setting
+                name: Sunset
+                icon: mdi:weather-sunset-down
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.sun_next_dawn
+                name: Dawn
+                icon: mdi:weather-sunset-up
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.sun_next_dusk
+                name: Dusk
+                icon: mdi:weather-sunset-down
+                primary_info: name
+                secondary_info: state
+  - title: Climate
+    path: climate
+    icon: mdi:thermostat
+    theme: Material You
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Climate Control
+          - type: custom:mushroom-climate-card
+            entity: climate.ac
+            show_temperature_control: true
+            hvac_modes:
+              - heat_cool
+              - cool
+              - heat
+              - dry
+              - fan_only
+              - 'off'
+            layout: horizontal
+            fill_container: true
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: Low
+                entity: climate.ac
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: climate.set_fan_mode
+                  service_data:
+                    entity_id: climate.ac
+                    fan_mode: low
+                styles:
+                  card:
+                    - height: 40px
+                    - border: 0px solid
+                    - border-color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'low' ? 'var(--primary-color)' : 'var(--divider-color)';
+                        ]]]
+                    - background: |
+                        [[[
+                          return entity.attributes.fan_mode === 'low' ? 'var(--primary-color)' : 'transparent';
+                        ]]]
+                    - border-radius: 6px
+                  name:
+                    - font-size: 12px
+                    - color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'low' ? 'white' : 'var(--primary-text-color)';
+                        ]]]
+              - type: custom:button-card
+                name: Med
+                entity: climate.ac
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: climate.set_fan_mode
+                  service_data:
+                    entity_id: climate.ac
+                    fan_mode: medium
+                styles:
+                  card:
+                    - height: 40px
+                    - border: 0px solid
+                    - border-color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'medium' ? 'var(--primary-color)' : 'var(--divider-color)';
+                        ]]]
+                    - background: |
+                        [[[
+                          return entity.attributes.fan_mode === 'medium' ? 'var(--primary-color)' : 'transparent';
+                        ]]]
+                    - border-radius: 6px
+                  name:
+                    - font-size: 12px
+                    - color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'medium' ? 'white' : 'var(--primary-text-color)';
+                        ]]]
+              - type: custom:button-card
+                name: High
+                entity: climate.ac
+                show_icon: false
+                show_state: false
+                tap_action:
+                  action: call-service
+                  service: climate.set_fan_mode
+                  service_data:
+                    entity_id: climate.ac
+                    fan_mode: high
+                styles:
+                  card:
+                    - height: 40px
+                    - border: 0px solid
+                    - border-color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'high' ? 'var(--primary-color)' : 'var(--divider-color)';
+                        ]]]
+                    - background: |
+                        [[[
+                          return entity.attributes.fan_mode === 'high' ? 'var(--primary-color)' : 'transparent';
+                        ]]]
+                    - border-radius: 6px
+                  name:
+                    - font-size: 12px
+                    - color: |
+                        [[[
+                          return entity.attributes.fan_mode === 'high' ? 'white' : 'var(--primary-text-color)';
+                        ]]]
+      - type: grid
+        cards:
+          - type: heading
+            heading: Zone Controls
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_master
+                name: Master
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_office
+                name: Office
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_living
+                name: Living
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_bedroom_3
+                name: Bedroom 3
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_bedroom_4
+                name: Bedroom 4
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_media_room
+                name: Media
+                show_position_control: true
+                layout: vertical
+              - type: custom:mushroom-cover-card
+                entity: cover.ac_kitchen
+                name: Kitchen
+                show_position_control: true
+                layout: vertical
+  - title: Lights
+    path: lights
+    icon: mdi:lightbulb
+    theme: Material You
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: All Lights
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-light-card
+                entity: light.hallway_lamp
+                use_light_color: true
+                show_brightness_control: true
+                layout: vertical
+              - type: custom:mushroom-light-card
+                entity: light.nicks_hue_go
+                name: Hue Go
+                use_light_color: true
+                show_brightness_control: true
+                show_color_control: true
+                layout: vertical
+              - type: custom:mushroom-light-card
+                entity: light.p1s_01p00a451000749_chamber_light
+                name: 3D Printer
+                use_light_color: true
+                show_brightness_control: true
+                layout: vertical
+  - title: Security
+    path: security
+    icon: mdi:shield-home
+    theme: Material You
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Doors & Garage
+          - type: custom:mushroom-entity-card
+            entity: cover.smart_garage_door_24090470488066610701c4e7ae0ac4b7_garage
+            name: Garage Door
+            icon: mdi:garage
+            tap_action:
+              action: toggle
+            hold_action:
+              action: more-info
+            layout: horizontal
+            fill_container: true
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: binary_sensor.front_door_contact
+                name: Back Door
+                icon: mdi:door
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: binary_sensor.0x6cfd22fffeb5a0cc_contact
+                name: Bedroom Window
+                icon: mdi:window-closed
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: binary_sensor.0x6cfd22fffeb59990_contact
+                name: Living Window
+                icon: mdi:window-closed
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-entity-card
+                entity: binary_sensor.0x6cfd22fffeb5bad4_contact
+                name: Office Window
+                icon: mdi:window-closed
+                tap_action:
+                  action: more-info
+      - type: grid
+        cards:
+          - type: heading
+            heading: Cameras
+          - type: picture-entity
+            entity: camera.g4_doorbell_pro_high_resolution_channel
+            name: Front Door
+            show_state: false
+            show_name: true
+            camera_view: live
+  - title: Media
+    path: media
+    icon: mdi:play-circle
+    theme: Material You
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Media Players
+          - type: custom:mushroom-media-player-card
+            entity: media_player.living_room
+            use_media_info: true
+            show_volume_level: true
+            layout: horizontal
+            fill_container: true
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-media-player-card
+                entity: media_player.kitchen
+                use_media_info: true
+                show_volume_level: true
+                layout: vertical
+              - type: custom:mushroom-media-player-card
+                entity: media_player.jbl_bar_500
+                name: JBL Bar
+                use_media_info: true
+                show_volume_level: true
+                layout: vertical
+              - type: custom:mushroom-media-player-card
+                entity: media_player.nicks_study_tv
+                name: Study TV
+                use_media_info: true
+                show_volume_level: true
+                layout: vertical
+              - type: custom:mushroom-media-player-card
+                entity: media_player.living_room_speaker
+                name: Living Speaker
+                use_media_info: true
+                show_volume_level: true
+                layout: vertical
+  - title: Energy
+    path: energy
+    icon: mdi:lightning-bolt
+    theme: Material You
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Solar & Battery
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_solar_power
+                name: Solar Power
+                icon: mdi:solar-power
+                icon_color: amber
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_state_of_charge
+                name: Battery SOC
+                icon: mdi:battery-high
+                icon_color: green
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_battery_energy
+                name: Battery Energy
+                icon: mdi:battery-charging
+                icon_color: green
+                primary_info: name
+                secondary_info: state
+          - type: grid
+            columns: 4
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_home_demand
+                name: Home Load
+                icon: mdi:home-lightning-bolt
+                icon_color: blue
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_grid_import
+                name: Grid Import
+                icon: mdi:transmission-tower-import
+                icon_color: red
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_grid_export
+                name: Grid Export
+                icon: mdi:transmission-tower-export
+                icon_color: green
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_grid_status
+                name: Grid Status
+                icon: mdi:transmission-tower
+                primary_info: name
+                secondary_info: state
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_charge_power
+                name: Battery Charging
+                icon: mdi:battery-arrow-up
+                icon_color: green
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.x1_h_3_68_6_k_s_discharge_power
+                name: Battery Discharging
+                icon: mdi:battery-arrow-down
+                icon_color: orange
+                primary_info: name
+                secondary_info: state
+          - type: custom:mini-graph-card
+            entities:
+              - entity: sensor.x1_h_3_68_6_k_s_solar_power
+                name: Solar
+                color: '#FFA726'
+              - entity: sensor.x1_h_3_68_6_k_s_home_demand
+                name: Home
+                color: '#42A5F5'
+              - entity: sensor.x1_h_3_68_6_k_s_grid_import
+                name: Import
+                color: '#EF5350'
+              - entity: sensor.x1_h_3_68_6_k_s_grid_export
+                name: Export
+                color: '#66BB6A'
+            hours_to_show: 24
+            points_per_hour: 4
+            line_width: 2
+            font_size: 75
+            animate: true
+            show:
+              labels: true
+              points: false
+              legend: true
+      - type: grid
+        cards:
+          - type: heading
+            heading: Appliance Energy
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.washing_machine_today_s_consumption_cost
+                name: Washing Machine
+                icon: mdi:washing-machine
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.dryer_today_s_consumption_cost
+                name: Dryer
+                icon: mdi:tumble-dryer
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.dishwasher_today_s_consumption_cost
+                name: Dishwasher
+                icon: mdi:dishwasher
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.coffee_machine_today_s_consumption_cost
+                name: Coffee
+                icon: mdi:coffee-maker
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.3d_printer_today_s_consumption_cost
+                name: 3D Printer
+                icon: mdi:printer-3d
+                primary_info: name
+                secondary_info: state
+              - type: custom:mushroom-entity-card
+                entity: sensor.microwave_today_s_consumption_cost
+                name: Microwave
+                icon: mdi:microwave
+                primary_info: name
+                secondary_info: state
+  - title: 3D Printing
+    path: printing
+    icon: mdi:printer-3d
+    theme: Material You
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Printer Status
+          - type: picture-entity
+            entity: camera.p1s_01p00a451000749_camera
+            name: P1S Camera
+            show_state: false
+            show_name: true
+            camera_view: live
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-light-card
+                entity: light.p1s_01p00a451000749_chamber_light
+                name: Chamber Light
+                use_light_color: true
+                show_brightness_control: true
+                layout: vertical
+              - type: custom:mushroom-entity-card
+                entity: sensor.3d_printer_today_s_consumption_cost
+                name: Today's Cost
+                icon: mdi:currency-usd
+                primary_info: name
+                secondary_info: state
+  - type: sections
+    max_columns: 4
+    icon: mdi:file-music-outline
+    path: ''
+    sections:
+      - type: grid
+        cards:
+          - type: iframe
+            url: http://172.20.0.40:8095/
+            grid_options:
+              columns: full
+              rows: 16
+        column_span: 4
+    title: Music
+    cards: []
+card_mod:
+  style: |
+    ha-card {
+      border-radius: 24px;
+      background: var(--ha-card-background);
+    }

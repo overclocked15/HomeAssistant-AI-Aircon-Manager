@@ -1,0 +1,12 @@
+{
+  "domain": "ai_aircon_manager",
+  "name": "AI Aircon Manager",
+  "codeowners": ["@yourusername"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/yourusername/ai-aircon-manager",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "requirements": ["anthropic>=0.18.0", "openai>=1.12.0"],
+  "version": "1.0.0"
+}

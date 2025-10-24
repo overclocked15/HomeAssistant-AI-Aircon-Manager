@@ -1,0 +1,115 @@
+alias: AC Manual Override Detection
+description: Detects when AC is manually changed and activates override protection
+trigger:
+  - platform: state
+    entity_id: climate.ac
+    attribute: temperature
+  - platform: state
+    entity_id: climate.ac
+    attribute: hvac_mode
+condition:
+  - condition: state
+    entity_id: input_boolean.ac_automation_enabled
+    state: "on"
+  - condition: template
+    value_template: >
+      {{ (trigger is defined and trigger.to_state and trigger.to_state.context.user_id is not none) or 
+         (trigger is defined and trigger.to_state and trigger.to_state.context.parent_id is not none) or
+         trigger is not defined }}
+action:
+  - action: notify.send_message
+    entity_id: notify.ntfy_homeassistant
+    metadata: {}
+    data:
+      title: "AC Manual Override Debug"
+      message: >
+        🔧 DEBUG: Manual Override Detected
+        Trigger: {{ trigger.entity_id if trigger is defined and trigger.entity_id else 'Manual/Test' }}
+        From: {{ trigger.from_state.state if trigger is defined and trigger.from_state else 'Unknown' }}
+        To: {{ trigger.to_state.state if trigger is defined and trigger.to_state else 'Unknown' }}
+        User ID: {{ trigger.to_state.context.user_id if trigger is defined and trigger.to_state and trigger.to_state.context.user_id else 'System' }}
+        Context: {{ trigger.to_state.context.id if trigger is defined and trigger.to_state and trigger.to_state.context else 'None' }}
+      topic: "HomeAssistant-Debug"
+      priority: low
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.ac_manual_override
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.ac_last_manual_change
+    data:
+      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+  - service: timer.start
+    target:
+      entity_id: timer.ac_override_timer
+  - action: notify.send_message
+    entity_id: notify.ntfy_homeassistant
+    metadata: {}
+    data:
+      title: "AC Manual Override"
+      message: "🎛️ AC manual override detected - automation paused for 2 hours"
+mode: single
+
+---
+
+alias: AC Manual Override Timer Reset
+description: Automatically resets manual override after timer expires
+trigger:
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.ac_override_timer
+action:
+  - action: notify.send_message
+    entity_id: notify.ntfy_homeassistant
+    metadata: {}
+    data:
+      title: "AC Override Timer Debug"
+      message: >
+        🔧 DEBUG: Manual Override Timer Expired
+        Timer Entity: {{ trigger.event.data.entity_id if trigger is defined and trigger.event and trigger.event.data else 'Manual/Test' }}
+        Override Duration: 2 hours completed
+      topic: "HomeAssistant-Debug"
+      priority: low
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.ac_manual_override
+  - action: notify.send_message
+    entity_id: notify.ntfy_homeassistant
+    metadata: {}
+    data:
+      title: "AC Automation Resumed"
+      message: "✅ AC automation resumed - manual override expired"
+mode: single
+
+---
+
+alias: AC Filter Maintenance Reminder
+description: Reminds to check AC filter when needed
+trigger:
+  - platform: state
+    entity_id: binary_sensor.ac_filter
+    to: "on"
+    for:
+      hours: 1
+action:
+  - action: notify.send_message
+    entity_id: notify.ntfy_homeassistant
+    metadata: {}
+    data:
+      title: "AC Filter Maintenance Debug"
+      message: >
+        🔧 DEBUG: Filter Maintenance Triggered
+        Filter Sensor: {{ trigger.entity_id if trigger is defined and trigger.entity_id else 'Manual/Test' }}
+        State: {{ trigger.to_state.state if trigger is defined and trigger.to_state else 'Unknown' }}
+        Duration: 1 hour in 'on' state
+      topic: "HomeAssistant-Debug"
+      priority: low
+  - action: notify.send_message
+    entity_id: notify.ntfy_homeassistant
+    metadata: {}
+    data:
+      title: "AC Filter Maintenance"
+      message: "🔧 AC Filter needs attention - check and replace if necessary"
+      priority: high
+mode: single

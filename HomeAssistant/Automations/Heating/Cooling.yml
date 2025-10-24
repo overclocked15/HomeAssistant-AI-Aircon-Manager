@@ -1,0 +1,391 @@
+alias: Smart AC Temperature Control Enhanced
+description: Intelligent AC control with safety features, sleep/away modes, and weather awareness
+trigger:
+  - platform: state
+    entity_id: sensor.0x001788010df6fe8a_temperature
+    for:
+      minutes: 3
+  - platform: state
+    entity_id: input_number.comfort_temperature
+  - platform: state
+    entity_id: input_number.ac_sleep_temperature
+  - platform: state
+    entity_id: input_number.ac_away_temperature
+  - platform: state
+    entity_id: input_boolean.ac_sleep_mode
+  - platform: state
+    entity_id: input_boolean.ac_away_mode
+  - platform: state
+    entity_id: input_boolean.ac_manual_override
+    to: "off"
+condition:
+  - condition: state
+    entity_id: input_boolean.ac_automation_enabled
+    state: "on"
+  - condition: state
+    entity_id: input_boolean.ac_manual_override
+    state: "off"
+  - condition: template
+    value_template: >
+      {{ (now() - states.climate.ac.last_changed).total_seconds() > 300 }}
+variables:
+  target_temp: >
+    {% if is_state('input_boolean.ac_away_mode', 'on') %}
+      {{ states('input_number.ac_away_temperature') | float(22) }}
+    {% elif is_state('input_boolean.ac_sleep_mode', 'on') %}
+      {{ states('input_number.ac_sleep_temperature') | float(20) }}
+    {% else %}
+      {{ states('input_number.comfort_temperature') | float(22) }}
+    {% endif %}
+  indoor_temp: "{{ states('sensor.0x001788010df6fe8a_temperature') | float(22) }}"
+  outdoor_temp: "{{ states('sensor.home_realfeel_temperature') | float(20) }}"
+  temp_diff_threshold: "{{ states('input_number.ac_temp_differential') | float(2) }}"
+  temp_difference: "{{ ((indoor_temp | default(22)) - (target_temp | default(22))) | abs }}"
+  anyone_home: >
+    {{ is_state('device_tracker.nicks_iphone', 'home') or 
+       is_state('device_tracker.pixel_8_pro', 'home') or 
+       is_state('device_tracker.pixel_8_pro_2', 'home') or
+       is_state('device_tracker.iphone', 'home') }}
+  phones_away_time: >
+    {% set away_times = [] %}
+    {% for phone in ['device_tracker.nicks_iphone', 'device_tracker.pixel_8_pro', 'device_tracker.pixel_8_pro_2', 'device_tracker.iphone'] %}
+      {% if not is_state(phone, 'home') and states[phone] %}
+        {% set away_times = away_times + [(now() - states[phone].last_changed).total_seconds()] %}
+      {% endif %}
+    {% endfor %}
+    {{ (away_times | min) if away_times else 0 }}
+action:
+  # Check: Auto-off if everyone away for 30+ minutes
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ not (anyone_home | default(true)) }}"
+          - condition: template
+            value_template: "{{ (phones_away_time | default(0)) > 1800 }}"
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: climate.ac
+                state: "off"
+        sequence:
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🏠 AC Presence Auto-Off
+              message: "AC turned off - no one home for {{ ((phones_away_time | default(0)) / 60) | round(0) }} minutes"
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🔧 AC Debug - Presence Auto-Off
+              message: >
+                Presence Check: Anyone home = {{ anyone_home | default('Unknown') }}
+                Away time: {{ ((phones_away_time | default(0)) / 60) | round(1) }} minutes
+                Phones: iPhone={{ states('device_tracker.nicks_iphone') }}, Pixel1={{ states('device_tracker.pixel_8_pro') }}, Pixel2={{ states('device_tracker.pixel_8_pro_2') }}, iPhone2={{ states('device_tracker.iphone') }}
+          - service: climate.set_fan_mode
+            target:
+              entity_id: climate.ac
+            data:
+              fan_mode: auto
+          - service: climate.turn_off
+            target:
+              entity_id: climate.ac
+          - stop: "AC turned off due to presence"
+  
+  # Debug: Automation triggered
+  - action: notify.send_message
+    target:
+      entity_id: notify.homeassistant_debug
+    data:
+      title: 🔍 AC Automation Debug
+      message: >
+        AC Automation Triggered
+        Trigger: {{ trigger.entity_id if trigger is defined and trigger.entity_id else 'Manual/Test' }}
+        Indoor: {{ (indoor_temp | default(22)) }}°C | Outdoor: {{ (outdoor_temp | default(20)) }}°C
+        Target: {{ (target_temp | default(22)) }}°C | Diff: {{ (temp_difference | default(0)) }}°C
+        Mode: {% if is_state('input_boolean.ac_away_mode', 'on') %}Away{% elif is_state('input_boolean.ac_sleep_mode', 'on') %}Sleep{% else %}Normal{% endif %}
+        AC State: {{ states('climate.ac') }} @ {{ state_attr('climate.ac', 'temperature') | default('N/A') }}°C Fan: {{ state_attr('climate.ac', 'fan_mode') | default('N/A') }}
+        Presence: {{ 'Home' if (anyone_home | default(false)) else 'Away (' + (((phones_away_time | default(0)) / 60) | round(0) | string) + 'm)' }}
+  - choose:
+      # Aggressive Heating (Indoor < Target - 4°C)
+      - conditions:
+          - condition: template
+            value_template: "{{ (indoor_temp | default(22)) < ((target_temp | default(22)) - 4) }}"
+          - condition: state
+            entity_id: climate.ac
+            state: "off"
+          # Safety: Only heat if outdoor is colder than indoor + threshold
+          - condition: template
+            value_template: "{{ (outdoor_temp | default(20)) < ((indoor_temp | default(22)) + (temp_diff_threshold | default(2))) }}"
+        sequence:
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🔥 AC Heating Alert
+              message: "AC starting aggressive heating: Indoor {{ (indoor_temp | default(22)) }}°C → Target {{ ((target_temp | default(22)) + 3) }}°C"
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🔧 AC Debug - Aggressive Heating
+              message: >
+                🔥 AGGRESSIVE HEATING: {{ (target_temp | default(22)) + 3 }}°C @ HIGH fan
+                Temp Diff: {{ (temp_difference | default(0)) }}°C
+                Conditions Met: Indoor({{ (indoor_temp | default(22)) }}) < Target-4({{ ((target_temp | default(22)) - 4) }}) ✓
+                AC Off: {{ states('climate.ac') == 'off' }} ✓
+                Weather Safe: Outdoor({{ (outdoor_temp | default(20)) }}) < Indoor+Threshold({{ ((indoor_temp | default(22)) + (temp_diff_threshold | default(2))) }}) = {{ (outdoor_temp | default(20)) < ((indoor_temp | default(22)) + (temp_diff_threshold | default(2))) }} ✓
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.ac
+            data:
+              temperature: "{{ (target_temp | default(22)) + 3 }}"
+              hvac_mode: heat
+          - service: climate.set_fan_mode
+            target:
+              entity_id: climate.ac
+            data:
+              fan_mode: high
+      
+      # Moderate Heating (Indoor between Target - 4°C and Target - 2°C)
+      - conditions:
+          - condition: template
+            value_template: "{{ (indoor_temp | default(22)) >= ((target_temp | default(22)) - 4) and (indoor_temp | default(22)) < ((target_temp | default(22)) - 2) }}"
+          - condition: state
+            entity_id: climate.ac
+            state: heat
+          - condition: template
+            value_template: "{{ (outdoor_temp | default(20)) < ((indoor_temp | default(22)) + (temp_diff_threshold | default(2))) }}"
+        sequence:
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🔧 AC Debug - Moderate Heating
+              message: >
+                🔥 MODERATE HEATING: {{ (target_temp | default(22)) + 1 }}°C @ MEDIUM fan
+                Temp Diff: {{ (temp_difference | default(0)) }}°C
+                Conditions: Indoor({{ (indoor_temp | default(22)) }}) between Target-4({{ ((target_temp | default(22)) - 4) }}) and Target-2({{ ((target_temp | default(22)) - 2) }}) ✓
+                AC Heating: {{ states('climate.ac') == 'heat' }} ✓
+                Weather Safe: {{ (outdoor_temp | default(20)) < ((indoor_temp | default(22)) + (temp_diff_threshold | default(2))) }} ✓
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.ac
+            data:
+              temperature: "{{ (target_temp | default(22)) + 1 }}"
+              hvac_mode: heat
+          - service: climate.set_fan_mode
+            target:
+              entity_id: climate.ac
+            data:
+              fan_mode: medium
+      
+      # Aggressive Cooling (Indoor > Target + 3°C)
+      - conditions:
+          - condition: template
+            value_template: "{{ (indoor_temp | default(22)) > ((target_temp | default(22)) + 3) }}"
+          - condition: state
+            entity_id: climate.ac
+            state: "off"
+          # Safety: Only cool if outdoor is warmer than indoor - threshold
+          - condition: template
+            value_template: "{{ (outdoor_temp | default(20)) > ((indoor_temp | default(22)) - (temp_diff_threshold | default(2))) }}"
+        sequence:
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: ❄️ AC Cooling Alert
+              message: "AC starting aggressive cooling: Indoor {{ (indoor_temp | default(22)) }}°C → Target {{ ((target_temp | default(22)) - 3) }}°C"
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🔧 AC Debug - Aggressive Cooling
+              message: >
+                ❄️ AGGRESSIVE COOLING: {{ (target_temp | default(22)) - 3 }}°C @ HIGH fan
+                Temp Diff: {{ (temp_difference | default(0)) }}°C
+                Conditions: Indoor({{ (indoor_temp | default(22)) }}) > Target+3({{ ((target_temp | default(22)) + 3) }}) ✓
+                AC Off: {{ states('climate.ac') == 'off' }} ✓
+                Weather Safe: Outdoor({{ (outdoor_temp | default(20)) }}) > Indoor-Threshold({{ ((indoor_temp | default(22)) - (temp_diff_threshold | default(2))) }}) = {{ (outdoor_temp | default(20)) > ((indoor_temp | default(22)) - (temp_diff_threshold | default(2))) }} ✓
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.ac
+            data:
+              temperature: "{{ (target_temp | default(22)) - 3 }}"
+              hvac_mode: cool
+          - service: climate.set_fan_mode
+            target:
+              entity_id: climate.ac
+            data:
+              fan_mode: high
+      
+      # Moderate Cooling (Indoor between Target + 2°C and Target + 3°C)
+      - conditions:
+          - condition: template
+            value_template: "{{ (indoor_temp | default(22)) > ((target_temp | default(22)) + 2) and (indoor_temp | default(22)) <= ((target_temp | default(22)) + 3) }}"
+          - condition: state
+            entity_id: climate.ac
+            state: cool
+          - condition: template
+            value_template: "{{ (outdoor_temp | default(20)) > ((indoor_temp | default(22)) - (temp_diff_threshold | default(2))) }}"
+        sequence:
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🔧 AC Debug - Moderate Cooling
+              message: >
+                ❄️ MODERATE COOLING: {{ (target_temp | default(22)) - 1 }}°C @ MEDIUM fan
+                Temp Diff: {{ (temp_difference | default(0)) }}°C
+                Conditions: Indoor({{ (indoor_temp | default(22)) }}) between Target+2({{ ((target_temp | default(22)) + 2) }}) and Target+3({{ ((target_temp | default(22)) + 3) }}) ✓
+                AC Cooling: {{ states('climate.ac') == 'cool' }} ✓
+                Weather Safe: {{ (outdoor_temp | default(20)) > ((indoor_temp | default(22)) - (temp_diff_threshold | default(2))) }} ✓
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.ac
+            data:
+              temperature: "{{ (target_temp | default(22)) - 1 }}"
+              hvac_mode: cool
+          - service: climate.set_fan_mode
+            target:
+              entity_id: climate.ac
+            data:
+              fan_mode: medium
+      
+      # Maintenance Mode (Within ±1°C of target)
+      - conditions:
+          - condition: template
+            value_template: "{{ (indoor_temp | default(22)) >= ((target_temp | default(22)) - 1) and (indoor_temp | default(22)) <= ((target_temp | default(22)) + 1) }}"
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: climate.ac
+                state: heat
+              - condition: state
+                entity_id: climate.ac
+                state: cool
+        sequence:
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🔧 AC Debug - Maintenance Mode
+              message: >
+                ⚖️ MAINTENANCE MODE: {{ (target_temp | default(22)) }}°C @ LOW fan
+                Temp Diff: {{ (temp_difference | default(0)) }}°C
+                Conditions: Indoor({{ (indoor_temp | default(22)) }}) within Target±1({{ ((target_temp | default(22)) - 1) }} to {{ ((target_temp | default(22)) + 1) }}) ✓
+                AC Active: {{ states('climate.ac') in ['heat', 'cool'] }} ✓
+          - service: climate.set_temperature
+            target:
+              entity_id: climate.ac
+            data:
+              temperature: "{{ (target_temp | default(22)) }}"
+          - service: climate.set_fan_mode
+            target:
+              entity_id: climate.ac
+            data:
+              fan_mode: low
+      
+      # Auto-Off Protection (Temperature overshoot)
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: and
+                conditions:
+                  - condition: state
+                    entity_id: climate.ac
+                    state: heat
+                  - condition: template
+                    value_template: "{{ (indoor_temp | default(22)) > ((target_temp | default(22)) + 3) }}"
+              - condition: and
+                conditions:
+                  - condition: state
+                    entity_id: climate.ac
+                    state: cool
+                  - condition: template
+                    value_template: "{{ (indoor_temp | default(22)) < ((target_temp | default(22)) - 3) }}"
+        sequence:
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: ⚠️ AC Auto-Off Alert
+              message: "AC auto-off: Temperature overshoot detected ({{ (indoor_temp | default(22)) }}°C vs target {{ (target_temp | default(22)) }}°C)"
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🔧 AC Debug - Auto-Off Protection
+              message: >
+                Auto-Off Protection Action
+                AC Mode: {{ states('climate.ac') }}
+                Overshoot Check: {% if states('climate.ac') == 'heat' %}Heat overshoot: Indoor({{ (indoor_temp | default(22)) }}) > Target+3({{ ((target_temp | default(22)) + 3) }}) = {{ (indoor_temp | default(22)) > ((target_temp | default(22)) + 3) }}{% else %}Cool overshoot: Indoor({{ (indoor_temp | default(22)) }}) < Target-3({{ ((target_temp | default(22)) - 3) }}) = {{ (indoor_temp | default(22)) < ((target_temp | default(22)) - 3) }}{% endif %}
+          - service: climate.set_fan_mode
+            target:
+              entity_id: climate.ac
+            data:
+              fan_mode: auto
+          - service: climate.turn_off
+            target:
+              entity_id: climate.ac
+      
+      # Weather-based shutdown
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: and
+                conditions:
+                  - condition: state
+                    entity_id: climate.ac
+                    state: heat
+                  - condition: template
+                    value_template: "{{ (outdoor_temp | default(20)) > ((indoor_temp | default(22)) + (temp_diff_threshold | default(2))) }}"
+              - condition: and
+                conditions:
+                  - condition: state
+                    entity_id: climate.ac
+                    state: cool
+                  - condition: template
+                    value_template: "{{ (outdoor_temp | default(20)) < ((indoor_temp | default(22)) - (temp_diff_threshold | default(2))) }}"
+        sequence:
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🌡️ AC Weather Alert
+              message: "AC off: Outdoor temperature ({{ (outdoor_temp | default(20)) }}°C) conflicts with indoor needs"
+          - action: notify.send_message
+            target:
+              entity_id: notify.homeassistant_debug
+            data:
+              title: 🔧 AC Debug - Weather-Based Shutdown
+              message: >
+                Weather-Based Shutdown Action
+                AC Mode: {{ states('climate.ac') }}
+                Conflict: {% if states('climate.ac') == 'heat' %}Heating when outdoor({{ (outdoor_temp | default(20)) }}) > indoor+threshold({{ ((indoor_temp | default(22)) + (temp_diff_threshold | default(2))) }}){% else %}Cooling when outdoor({{ (outdoor_temp | default(20)) }}) < indoor-threshold({{ ((indoor_temp | default(22)) - (temp_diff_threshold | default(2))) }}){% endif %}
+          - service: climate.set_fan_mode
+            target:
+              entity_id: climate.ac
+            data:
+              fan_mode: auto
+          - service: climate.turn_off
+            target:
+              entity_id: climate.ac
+    default:
+      - action: notify.send_message
+        target:
+          entity_id: notify.homeassistant_debug
+        data:
+          title: 🔍 AC Debug - No Action
+          message: >
+            No Action Taken
+            Indoor: {{ (indoor_temp | default(22)) }}°C | Target: {{ (target_temp | default(22)) }}°C | Outdoor: {{ (outdoor_temp | default(20)) }}°C
+            AC State: {{ states('climate.ac') }} @ {{ state_attr('climate.ac', 'temperature') }}°C
+            Conditions: 
+            - Automation Enabled: {{ is_state('input_boolean.ac_automation_enabled', 'on') }}
+            - Manual Override Off: {{ is_state('input_boolean.ac_manual_override', 'off') }}
+            - 5min Since Last Change: {{ (now() - states.climate.ac.last_changed).total_seconds() > 300 }}
+            No matching action conditions met.
+mode: single

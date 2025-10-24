@@ -1,0 +1,91 @@
+# Input helpers for Smart AC automation
+# Add these to your configuration.yaml or create via Settings > Devices & Services > Helpers
+
+input_boolean:
+  ac_automation_enabled:
+    name: "Smart AC Automation Enabled"
+    icon: mdi:thermostat-auto
+  
+  ac_sleep_mode:
+    name: "AC Sleep Mode"
+    icon: mdi:sleep
+  
+  ac_away_mode:
+    name: "AC Away Mode"
+    icon: mdi:home-export-outline
+  
+  ac_manual_override:
+    name: "AC Manual Override Active"
+    icon: mdi:hand-back-right
+
+input_number:
+  ac_sleep_temperature:
+    name: "Sleep Mode Temperature"
+    min: 16
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    initial: 20
+  
+  ac_away_temperature:
+    name: "Away Mode Temperature"
+    min: 16
+    max: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer
+    initial: 18
+  
+  ac_temp_differential:
+    name: "Min Outdoor/Indoor Temp Difference"
+    min: 0
+    max: 10
+    step: 0.5
+    unit_of_measurement: "°C"
+    icon: mdi:thermometer-lines
+    initial: 2
+
+input_datetime:
+  ac_last_manual_change:
+    name: "AC Last Manual Change"
+    has_date: true
+    has_time: true
+
+timer:
+  ac_override_timer:
+    name: "AC Manual Override Timer"
+    duration: "02:00:00"
+    icon: mdi:timer
+
+sensor:
+  - platform: template
+    sensors:
+      ac_presence_status:
+        friendly_name: "AC Presence Status"
+        value_template: >
+          {% set phones = ['device_tracker.nicks_iphone', 'device_tracker.pixel_8_pro', 'device_tracker.pixel_8_pro_2', 'device_tracker.iphone'] %}
+          {% set home_phones = phones | select('is_state', 'home') | list %}
+          {% if home_phones | length > 0 %}
+            Home ({{ home_phones | length }} device{{ 's' if home_phones | length > 1 else '' }})
+          {% else %}
+            {% set away_times = [] %}
+            {% for phone in phones %}
+              {% if states[phone] and not is_state(phone, 'home') %}
+                {% set away_times = away_times + [(now() - states[phone].last_changed).total_seconds()] %}
+              {% endif %}
+            {% endfor %}
+            {% if away_times %}
+              Away {{ (away_times | min / 60) | round(0) }}m
+            {% else %}
+              Unknown
+            {% endif %}
+          {% endif %}
+        icon_template: >
+          {% set phones = ['device_tracker.nicks_iphone', 'device_tracker.pixel_8_pro', 'device_tracker.pixel_8_pro_2', 'device_tracker.iphone'] %}
+          {% set home_phones = phones | select('is_state', 'home') | list %}
+          {% if home_phones | length > 0 %}
+            mdi:home-account
+          {% else %}
+            mdi:home-export-outline
+          {% endif %}

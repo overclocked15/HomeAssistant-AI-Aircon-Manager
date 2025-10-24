@@ -1,0 +1,95 @@
+@import url("https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/theme.css");
+@import url("https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/colors/jellyflix.css");
+
+/* Optional add-ons for enhanced Netflix-like features (pick and choose based on the repo reference) */
+@import url("https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/progress_bar.css"); /* Floating progress bar */
+@import url("https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/indicators.css"); /* Corner-attached indicators */
+@import url("https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/icontext.css"); /* Text instead of icons on item details */
+@import url("https://cdn.jsdelivr.net/gh/n00bcodr/Jellyfish/ratings.css"); /* Coloured parental ratings (requires custom JS from the repo) */
+
+
+:root {
+    --logo: url("https://i.imgur.com/getXafO.png");
+}
+
+.pageTitleWithDefaultLogo {
+    background-size: 100% !important;
+}
+
+.layout-mobile .pageTitleWithDefaultLogo {
+    width: 130px !important;
+}
+
+#loginPage .visualLoginForm:not(.hide) h1::before {
+  background-size: 50% !important;
+}
+
+#loginPage .manualLoginForm:not(.hide) h1.sectionTitle::before {
+  background-size: 100% !important;
+}
+/* Custom additions for a more Netflix-like feel (based on common Jellyfin selectors and Netflix's style) */
+body {
+  background-color: #141414; /* Netflix main background */
+  color: #ffffff;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; /* Approximate Netflix font stack */
+}
+
+.skinHeader {
+  background-color: transparent; /* Transparent header like Netflix */
+  transition: background-color 0.3s ease;
+}
+
+.skinHeader.withBackground {
+  background-color: rgba(20, 20, 20, 0.7); /* Semi-transparent on scroll */
+}
+
+.card {
+  border-radius: 4px; /* Rounded corners on posters like Netflix */
+  overflow: hidden;
+  transition: transform 0.2s ease;
+}
+
+.card:hover {
+  transform: scale(1.05); /* Hover scale effect */
+}
+
+.cardImageContainer {
+  border-radius: 4px;
+}
+
+.indicator, .playedIndicator, .countIndicator {
+  background: rgba(0, 0, 0, 0.5); /* Dark transparent indicators */
+}
+
+.button-accent, .raised, .fab {
+  background-color: #e50914; /* Netflix red accents */
+  color: #ffffff;
+}
+
+.button-accent:hover {
+  background-color: #f40612; /* Slightly brighter red on hover */
+}
+
+/* Hide unnecessary elements for a cleaner Netflix-style layout */
+.headerHomeButton, .headerCastButton, .headerSyncButton {
+  display: none;
+}
+
+#castCollapsible, #similarCollapsible {
+  display: none; /* Hide cast/crew and similar sections if desired */
+}
+
+/* Add subtle noise texture to background for Netflix vibe (optional, base64-encoded noise pattern) */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIyMjIAAAACcHYAAAABc1JTVAAAAA1JREFUeNrsy8ENAAAIArD/3wABgK4W4wAAAABJRU5ErkJggg==');
+  background-size: 100px;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: -1;
+}

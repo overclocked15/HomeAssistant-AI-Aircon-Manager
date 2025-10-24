@@ -1,0 +1,526 @@
+/*
+ * Modern Clean Theme for Jellyfin
+ * Inspired by Netflix and HDO Box with clean, modern aesthetics
+ * Features: Glassmorphism, smooth animations, modern card designs
+ */
+
+/* ==================== COLOR VARIABLES ==================== */
+:root {
+    /* Custom Logo */
+    --logo: url("https://i.imgur.com/getXafO.png");
+
+    /* Primary Colors */
+    --primary-bg: #0a0a0a;
+    --secondary-bg: #141414;
+    --card-bg: #1a1a1a;
+    --hover-bg: #242424;
+
+    /* Accent Colors */
+    --accent-primary: #e50914;
+    --accent-primary-hover: #f40612;
+    --accent-secondary: #00b4d8;
+
+    /* Text Colors */
+    --text-primary: #ffffff;
+    --text-secondary: #b3b3b3;
+    --text-muted: #808080;
+
+    /* Glass Effect */
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+
+    /* Shadows */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 20px rgba(229, 9, 20, 0.3);
+
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+}
+
+/* ==================== LOGO STYLING ==================== */
+.pageTitleWithDefaultLogo {
+    background-image: var(--logo) !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+}
+
+.layout-tv .pageTitleWithLogo,
+.layout-desktop .pageTitleWithLogo {
+    margin-left: 25px !important;
+    height: 60px !important;
+    width: 140px !important;
+}
+
+.layout-mobile .pageTitleWithLogo {
+    height: 30px !important;
+    width: 100px !important;
+    margin: 0 1em 0 .5em !important;
+    padding: 10px !important;
+}
+
+/* ==================== GLOBAL STYLES ==================== */
+body {
+    background-color: var(--primary-bg);
+    background-image:
+        radial-gradient(circle at 20% 50%, rgba(229, 9, 20, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(0, 180, 216, 0.03) 0%, transparent 50%);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Helvetica Neue', Arial, sans-serif;
+    font-smooth: always;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle noise texture overlay */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23noise)" opacity="0.03"/></svg>');
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.5;
+}
+
+/* ==================== HEADER & NAVIGATION ==================== */
+.skinHeader {
+    background: linear-gradient(180deg, rgba(10, 10, 10, 0.95) 0%, rgba(10, 10, 10, 0.7) 70%, transparent 100%);
+    transition: all 0.3s ease;
+    border-bottom: 1px solid transparent;
+}
+
+.skinHeader.headroom--not-top {
+    background: rgba(10, 10, 10, 0.98);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-md);
+}
+
+/* Header Buttons */
+.headerButton {
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+}
+
+.headerButton:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ==================== CARDS & MEDIA ITEMS ==================== */
+.card,
+.cardBox,
+.cardScalable {
+    border-radius: var(--radius-lg) !important;
+    overflow: hidden !important;
+}
+
+.card {
+    background: transparent;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.card:hover {
+    transform: scale(1.05);
+    z-index: 10;
+}
+
+.cardBox {
+    transition: all 0.3s ease;
+}
+
+.card:hover .cardBox {
+    box-shadow: var(--shadow-lg);
+}
+
+.card-hoverable.card:hover > .cardBox > .cardScalable {
+    border: 2px solid var(--accent-primary) !important;
+}
+
+/* Card Image Container */
+.cardImageContainer {
+    border-radius: var(--radius-lg) !important;
+    overflow: hidden !important;
+    position: relative;
+}
+
+.cardImage,
+.cardImage-img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    filter: none !important;
+}
+
+.cardImageContainer .cardImage {
+    background-size: cover !important;
+    filter: none !important;
+}
+
+.listItemImage {
+    background-size: cover !important;
+    border-radius: var(--radius-lg);
+    max-height: fit-content;
+    min-height: 10em !important;
+}
+
+img.cardImage-img,
+img.itemImage,
+.cardImage img {
+    display: block !important;
+    width: 100%;
+    height: 100%;
+}
+
+/* Ensure lazy-loaded images display correctly */
+.lazy,
+.lazyload,
+.lazyloaded {
+    opacity: 1 !important;
+}
+
+/* Hide blurhash canvas when image loads */
+.cardImageContainer .blurhash-canvas {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+.cardImageContainer img {
+    position: relative;
+    z-index: 1;
+}
+
+/* Ensure actual images appear above blurhash */
+.lazy-image-fadein-fast,
+.lazy-image-fadein {
+    z-index: 1 !important;
+    position: relative !important;
+}
+
+.cardOverlayButton {
+    border-radius: var(--radius-md);
+}
+
+/* Card Content */
+.cardContent {
+    padding: 8px;
+}
+
+.cardText {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.cardText-secondary {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+/* ==================== BUTTONS ==================== */
+.button-flat,
+.button-submit,
+.raised,
+.fab,
+.emby-button {
+    border-radius: var(--radius-md) !important;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0.3px;
+    transition: all 0.2s ease;
+}
+
+/* Primary Action Buttons */
+.button-submit,
+.raised.submit,
+.emby-button-accent {
+    background: var(--accent-primary) !important;
+    color: var(--text-primary) !important;
+}
+
+.button-submit:hover,
+.raised.submit:hover,
+.emby-button-accent:hover {
+    background: var(--accent-primary-hover) !important;
+    transform: translateY(-2px);
+}
+
+/* Play Button */
+.itemAction.playedIndicator,
+.playedIndicator {
+    background: rgba(229, 9, 20, 0.9) !important;
+    border-radius: var(--radius-md);
+}
+
+/* ==================== INDICATORS & BADGES ==================== */
+.indicator,
+.countIndicator {
+    background: rgba(0, 0, 0, 0.7) !important;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+}
+
+.playedIndicator {
+    background: rgba(0, 180, 216, 0.9) !important;
+}
+
+/* Progress Bar */
+.itemProgressBar {
+    background: rgba(255, 255, 255, 0.2) !important;
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.itemProgressBarForeground {
+    background: var(--accent-primary) !important;
+    border-radius: 2px;
+}
+
+/* ==================== SECTIONS & CONTAINERS ==================== */
+.section {
+    margin-bottom: 3em;
+}
+
+.sectionTitle {
+    color: var(--text-primary);
+    font-size: 1.6em;
+    font-weight: 600;
+    margin-bottom: 1em;
+    letter-spacing: -0.5px;
+}
+
+.sectionTitleContainer {
+    border-bottom: 1px solid var(--glass-border);
+    padding-bottom: 0.5em;
+    margin-bottom: 1.5em;
+}
+
+/* Vertical List Items */
+.listItem {
+    background: var(--card-bg);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.5em;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.listItem:hover {
+    background: var(--hover-bg);
+    border-color: var(--glass-border);
+    transform: translateX(8px);
+}
+
+/* ==================== BACKDROP & DETAILS PAGE ==================== */
+.backdropImage {
+    filter: brightness(0.4);
+    transition: filter 0.5s ease;
+}
+
+.detailImageContainer {
+    position: relative;
+}
+
+.detailImageContainer::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 300px;
+    background: linear-gradient(to top, var(--primary-bg), transparent);
+    pointer-events: none;
+}
+
+.detailLogo {
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.8));
+}
+
+.itemName {
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+/* ==================== FORMS & INPUTS ==================== */
+.emby-input,
+.emby-textarea,
+.emby-select {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: var(--radius-md) !important;
+    color: var(--text-primary) !important;
+    transition: all 0.2s ease;
+}
+
+.emby-input:focus,
+.emby-textarea:focus,
+.emby-select:focus {
+    border-color: var(--accent-primary) !important;
+    outline: none !important;
+}
+
+.emby-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Checkboxes */
+.emby-checkbox:checked + span {
+    color: var(--accent-primary) !important;
+}
+
+/* ==================== MODALS & DIALOGS ==================== */
+.dialog {
+    background: var(--secondary-bg) !important;
+    border-radius: var(--radius-xl) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-lg);
+}
+
+.dialog-content {
+    padding: 24px;
+}
+
+.dialogBackdrop {
+    background: rgba(0, 0, 0, 0.85) !important;
+}
+
+/* ==================== SIDEBAR & DRAWER ==================== */
+.mainDrawer {
+    background: var(--secondary-bg) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.navMenuOption:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-radius: var(--radius-md);
+}
+
+.navMenuOption-selected {
+    background: var(--accent-primary) !important;
+    border-radius: var(--radius-md);
+}
+
+/* ==================== SCROLLBAR ==================== */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--secondary-bg);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--glass-bg);
+    border-radius: 5px;
+    border: 2px solid var(--secondary-bg);
+    transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--hover-bg);
+}
+
+/* ==================== LOGIN PAGE ==================== */
+#loginPage {
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%) !important;
+}
+
+#loginPage .padded-left,
+#loginPage .padded-right {
+    background: rgba(26, 26, 26, 0.8) !important;
+    border-radius: var(--radius-xl);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-lg);
+}
+
+#loginPage h1 {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+#loginPage .visualLoginForm:not(.hide) h1::before,
+#loginPage .manualLoginForm:not(.hide) h1.sectionTitle::before {
+    background-image: var(--logo) !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+}
+
+/* ==================== RESPONSIVE DESIGN ==================== */
+@media (max-width: 768px) {
+    .card:hover {
+        transform: scale(1.05) translateY(-4px);
+    }
+
+    .sectionTitle {
+        font-size: 1.3em;
+    }
+
+    .skinHeader {
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+}
+
+@media (max-width: 480px) {
+    :root {
+        --radius-lg: 8px;
+        --radius-xl: 12px;
+    }
+
+    .card {
+        border-radius: var(--radius-md);
+    }
+}
+
+/* ==================== PERFORMANCE OPTIMIZATIONS ==================== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ==================== ADDITIONAL ENHANCEMENTS ==================== */
+/* Smooth page transitions */
+.view {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Focus indicators for accessibility */
+*:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* Selection styling */
+::selection {
+    background: var(--accent-primary);
+    color: var(--text-primary);
+}

@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up AI Aircon Manager",
+        "description": "Configure your AI provider and target temperature",
+        "data": {
+          "ai_provider": "AI Provider",
+          "api_key": "API Key",
+          "target_temperature": "Target Temperature (°C)"
+        }
+      },
+      "add_room": {
+        "title": "Add Room Configuration",
+        "description": "Configure rooms with temperature sensors and zone fan speed controls. Added {rooms_added} room(s) so far.",
+        "data": {
+          "room_name": "Room Name",
+          "temperature_sensor": "Temperature Sensor",
+          "cover_entity": "Zone Fan Speed Control",
+          "add_room": "Add another room?"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to AI provider",
+      "invalid_auth": "Invalid API key",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Integration is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "AI Aircon Manager Options",
+        "data": {
+          "target_temperature": "Target Temperature (°C)"
+        }
+      }
+    }
+  }
+}

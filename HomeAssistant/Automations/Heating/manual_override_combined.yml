@@ -1,0 +1,138 @@
+alias: AC Manual Override & Maintenance System
+description: Combined automation for manual override detection, timer management, and filter maintenance
+trigger:
+  # Manual override detection
+  - platform: state
+    entity_id: climate.ac
+    attribute: temperature
+    id: manual_temp_change
+  - platform: state
+    entity_id: climate.ac
+    attribute: hvac_mode
+    id: manual_mode_change
+  
+  # Timer expiration
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.ac_override_timer
+    id: timer_expired
+  
+  # Filter maintenance
+  - platform: state
+    entity_id: binary_sensor.ac_filter
+    to: "on"
+    for:
+      hours: 1
+    id: filter_maintenance
+
+condition: []
+
+action:
+  - choose:
+      # Manual Override Detection
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: manual_temp_change
+              - condition: trigger
+                id: manual_mode_change
+          - condition: state
+            entity_id: input_boolean.ac_automation_enabled
+            state: "on"
+          - condition: template
+            value_template: >
+              {{ (trigger is defined and trigger.to_state and trigger.to_state.context.user_id is not none) or 
+                 (trigger is defined and trigger.to_state and trigger.to_state.context.parent_id is not none) or
+                 trigger is not defined }}
+        sequence:
+          - action: notify.send_message
+            entity_id: notify.ntfy_homeassistant
+            metadata: {}
+            data:
+              title: "AC Manual Override Debug"
+              message: >
+                🔧 DEBUG: Manual Override Detected
+                Trigger: {{ trigger.entity_id if trigger is defined and trigger.entity_id else 'Manual/Test' }}
+                Attribute: {{ 'temperature' if trigger.id == 'manual_temp_change' else 'hvac_mode' if trigger.id == 'manual_mode_change' else 'unknown' }}
+                From: {{ trigger.from_state.state if trigger is defined and trigger.from_state else 'Unknown' }}
+                To: {{ trigger.to_state.state if trigger is defined and trigger.to_state else 'Unknown' }}
+                User ID: {{ trigger.to_state.context.user_id if trigger is defined and trigger.to_state and trigger.to_state.context.user_id else 'System' }}
+                Context: {{ trigger.to_state.context.id if trigger is defined and trigger.to_state and trigger.to_state.context else 'None' }}
+              data:
+                topic: "HomeAssistant-Debug"
+                priority: low
+          - service: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.ac_manual_override
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.ac_last_manual_change
+            data:
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - service: timer.start
+            target:
+              entity_id: timer.ac_override_timer
+          - action: notify.send_message
+            entity_id: notify.ntfy_homeassistant
+            metadata: {}
+            data:
+              title: "AC Manual Override"
+              message: "🎛️ AC manual override detected - automation paused for 2 hours"
+
+      # Timer Expiration
+      - conditions:
+          - condition: trigger
+            id: timer_expired
+        sequence:
+          - action: notify.send_message
+            entity_id: notify.ntfy_homeassistant
+            metadata: {}
+            data:
+              title: "AC Override Timer Debug"
+              message: >
+                🔧 DEBUG: Manual Override Timer Expired
+                Timer Entity: {{ trigger.event.data.entity_id if trigger is defined and trigger.event and trigger.event.data else 'Manual/Test' }}
+                Override Duration: 2 hours completed
+              data:
+                topic: "HomeAssistant-Debug"
+                priority: low
+          - service: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.ac_manual_override
+          - action: notify.send_message
+            entity_id: notify.ntfy_homeassistant
+            metadata: {}
+            data:
+              title: "AC Automation Resumed"
+              message: "✅ AC automation resumed - manual override expired"
+
+      # Filter Maintenance
+      - conditions:
+          - condition: trigger
+            id: filter_maintenance
+        sequence:
+          - action: notify.send_message
+            entity_id: notify.ntfy_homeassistant
+            metadata: {}
+            data:
+              title: "AC Filter Maintenance Debug"
+              message: >
+                🔧 DEBUG: Filter Maintenance Triggered
+                Filter Sensor: {{ trigger.entity_id if trigger is defined and trigger.entity_id else 'Manual/Test' }}
+                State: {{ trigger.to_state.state if trigger is defined and trigger.to_state else 'Unknown' }}
+                Duration: 1 hour in 'on' state
+              data:
+                topic: "HomeAssistant-Debug"
+                priority: low
+          - action: notify.send_message
+            entity_id: notify.ntfy_homeassistant
+            metadata: {}
+            data:
+              title: "AC Filter Maintenance"
+              message: "🔧 AC Filter needs attention - check and replace if necessary"
+              data:
+                priority: high
+
+mode: single

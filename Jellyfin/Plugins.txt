@@ -1,0 +1,12 @@
+Intro Skipper
+https://intro-skipper.org/manifest.json
+Jellyfin Ignore
+https://raw.githubusercontent.com/fdett/jellyfin-ignore/master/manifest.json
+IAmParadox
+https://www.iamparadox.dev/jellyfin/plugins/manifest.json
+Jellyfin Unstable
+https://repo.jellyfin.org/files/plugin-unstable/manifest.json
+Jellyfin Enhanced
+https://raw.githubusercontent.com/n00bcodr/jellyfin-enhanced/main/manifest.json
+Jellyfin Tweaks
+https://raw.githubusercontent.com/n00bcodr/jellyfinTweaks/main/manifest.json
