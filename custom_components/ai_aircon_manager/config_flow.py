@@ -70,17 +70,30 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle adding room configuration."""
         if user_input is not None:
-            if user_input.get("add_room"):
-                self._rooms.append(
-                    {
-                        CONF_ROOM_NAME: user_input[CONF_ROOM_NAME],
-                        CONF_TEMPERATURE_SENSOR: user_input[CONF_TEMPERATURE_SENSOR],
-                        CONF_COVER_ENTITY: user_input[CONF_COVER_ENTITY],
-                    }
-                )
+            # Add the current room to the list
+            self._rooms.append(
+                {
+                    CONF_ROOM_NAME: user_input[CONF_ROOM_NAME],
+                    CONF_TEMPERATURE_SENSOR: user_input[CONF_TEMPERATURE_SENSOR],
+                    CONF_COVER_ENTITY: user_input[CONF_COVER_ENTITY],
+                }
+            )
+
+            # Check if user wants to add another room
+            if user_input.get("add_another"):
                 return await self.async_step_add_room()
             else:
                 # Done adding rooms
+                if len(self._rooms) == 0:
+                    return self.async_show_form(
+                        step_id="add_room",
+                        data_schema=self._get_room_schema(),
+                        description_placeholders={
+                            "rooms_added": str(len(self._rooms)),
+                        },
+                        errors={"base": "no_rooms"},
+                    )
+
                 self._data[CONF_ROOM_CONFIGS] = self._rooms
                 return self.async_create_entry(
                     title="AI Aircon Manager", data=self._data
@@ -88,21 +101,25 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="add_room",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_ROOM_NAME): cv.string,
-                    vol.Required(CONF_TEMPERATURE_SENSOR): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="sensor")
-                    ),
-                    vol.Required(CONF_COVER_ENTITY): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="cover")
-                    ),
-                    vol.Required("add_room", default=True): cv.boolean,
-                }
-            ),
+            data_schema=self._get_room_schema(),
             description_placeholders={
                 "rooms_added": str(len(self._rooms)),
             },
+        )
+
+    def _get_room_schema(self) -> vol.Schema:
+        """Get the schema for adding a room."""
+        return vol.Schema(
+            {
+                vol.Required(CONF_ROOM_NAME): cv.string,
+                vol.Required(CONF_TEMPERATURE_SENSOR): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Required(CONF_COVER_ENTITY): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="cover")
+                ),
+                vol.Required("add_another", default=False): cv.boolean,
+            }
         )
 
     @staticmethod

@@ -12,19 +12,20 @@
       },
       "add_room": {
         "title": "Add Room Configuration",
-        "description": "Configure rooms with temperature sensors and zone fan speed controls. Added {rooms_added} room(s) so far.",
+        "description": "Configure rooms with temperature sensors and zone fan speed controls. You have added {rooms_added} room(s) so far. After filling in the room details below, choose whether to add another room or finish setup.",
         "data": {
           "room_name": "Room Name",
           "temperature_sensor": "Temperature Sensor",
           "cover_entity": "Zone Fan Speed Control",
-          "add_room": "Add another room?"
+          "add_another": "Add another room after this one? (Uncheck to finish setup)"
         }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect to AI provider",
       "invalid_auth": "Invalid API key",
-      "unknown": "Unexpected error occurred"
+      "unknown": "Unexpected error occurred",
+      "no_rooms": "You must add at least one room"
     },
     "abort": {
       "already_configured": "Integration is already configured"
