@@ -49,9 +49,15 @@ class AirconOptimizer:
         self._last_ai_response = None
         self._last_error = None
         self._error_count = 0
+        self._startup_time = None
+        from .const import DEFAULT_STARTUP_DELAY
+        self._startup_delay_seconds = DEFAULT_STARTUP_DELAY
 
     async def async_setup(self) -> None:
         """Set up the AI client."""
+        import time
+        self._startup_time = time.time()
+
         if self.ai_provider == "claude":
             import anthropic
             self._ai_client = anthropic.AsyncAnthropic(api_key=self.api_key)
@@ -103,14 +109,29 @@ class AirconOptimizer:
         ]
 
         if not valid_temps:
-            _LOGGER.warning(
-                "No valid temperature readings available - skipping optimization. "
-                "Check that temperature sensors are working."
-            )
-            await self._send_notification(
-                "No Temperature Data",
-                "No valid temperature readings from sensors. Check sensor availability."
-            )
+            # Check if we're still in startup delay period
+            import time
+            time_since_startup = time.time() - self._startup_time if self._startup_time else float('inf')
+            in_startup_delay = time_since_startup < self._startup_delay_seconds
+
+            if in_startup_delay:
+                _LOGGER.info(
+                    "No valid temperature readings during startup delay (%.0fs / %ds). "
+                    "Sensors may still be initializing.",
+                    time_since_startup,
+                    self._startup_delay_seconds,
+                )
+            else:
+                _LOGGER.warning(
+                    "No valid temperature readings available - skipping optimization. "
+                    "Check that temperature sensors are working."
+                )
+                # Only send notification after startup delay has passed
+                await self._send_notification(
+                    "No Temperature Data",
+                    "No valid temperature readings from sensors. Check sensor availability."
+                )
+
             return {
                 "room_states": room_states,
                 "recommendations": {},
@@ -119,8 +140,8 @@ class AirconOptimizer:
                 "main_fan_speed": None,
                 "main_ac_running": main_ac_running,
                 "needs_ac": False,
-                "last_error": "No valid temperature data",
-                "error_count": self._error_count,
+                "last_error": "No valid temperature data" if not in_startup_delay else None,
+                "error_count": self._error_count if not in_startup_delay else 0,
             }
 
         # Only optimize if AC is running (or we don't have a main climate entity to check)
