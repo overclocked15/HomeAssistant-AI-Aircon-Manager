@@ -45,8 +45,15 @@ class MainClimateRunningSensor(CoordinatorEntity, BinarySensorEntity):
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
+        self._config_entry = config_entry
         self._attr_unique_id = f"{config_entry.entry_id}_main_climate_running"
         self._attr_name = "Main Aircon Running"
+
+    @property
+    def device_info(self):
+        """Return device information."""
+        from . import get_device_info
+        return get_device_info(self._config_entry)
 
     @property
     def is_on(self) -> bool | None:

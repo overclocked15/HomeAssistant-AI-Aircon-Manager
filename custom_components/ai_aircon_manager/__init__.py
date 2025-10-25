@@ -16,6 +16,9 @@ from .const import (
     DEFAULT_HVAC_MODE,
     DEFAULT_AUTO_CONTROL_MAIN_AC,
     DEFAULT_ENABLE_NOTIFICATIONS,
+    CONF_AI_MODEL,
+    DEFAULT_CLAUDE_MODEL,
+    DEFAULT_CHATGPT_MODEL,
 )
 from .optimizer import AirconOptimizer
 
@@ -24,14 +27,29 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR]
 
 
+def get_device_info(config_entry: ConfigEntry) -> dict:
+    """Get device info for all entities."""
+    return {
+        "identifiers": {(DOMAIN, config_entry.entry_id)},
+        "name": "AI Aircon Manager",
+        "manufacturer": "AI Aircon Manager",
+        "model": "AI-Powered HVAC Controller",
+        "sw_version": "1.3.0",
+    }
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AI Aircon Manager from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
+    # Determine default AI model based on provider
+    ai_provider = entry.data.get("ai_provider", "claude")
+    default_model = DEFAULT_CLAUDE_MODEL if ai_provider == "claude" else DEFAULT_CHATGPT_MODEL
+
     # Create the optimizer instance
     optimizer = AirconOptimizer(
         hass=hass,
-        ai_provider=entry.data.get("ai_provider", "claude"),
+        ai_provider=ai_provider,
         api_key=entry.data.get("api_key"),
         target_temperature=entry.data.get("target_temperature", 22),
         room_configs=entry.data.get("room_configs", {}),
@@ -43,6 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         enable_notifications=entry.data.get("enable_notifications", DEFAULT_ENABLE_NOTIFICATIONS),
         room_overrides=entry.data.get("room_overrides", {}),
         config_entry=entry,
+        ai_model=entry.data.get(CONF_AI_MODEL, default_model),
     )
 
     # Get update interval from config

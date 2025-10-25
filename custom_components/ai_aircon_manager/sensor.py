@@ -20,6 +20,21 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
+class AirconManagerSensorBase(CoordinatorEntity, SensorEntity):
+    """Base class for AI Aircon Manager sensors with device info."""
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the base sensor."""
+        super().__init__(coordinator)
+        self._config_entry = config_entry
+
+    @property
+    def device_info(self):
+        """Return device information."""
+        from . import get_device_info
+        return get_device_info(self._config_entry)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -73,7 +88,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class RoomTemperatureDifferenceSensor(CoordinatorEntity, SensorEntity):
+class RoomTemperatureDifferenceSensor(AirconManagerSensorBase):
     """Sensor showing temperature difference from target for a room."""
 
     _attr_device_class = SensorDeviceClass.TEMPERATURE
@@ -126,7 +141,7 @@ class RoomTemperatureDifferenceSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class RoomAIRecommendationSensor(CoordinatorEntity, SensorEntity):
+class RoomAIRecommendationSensor(AirconManagerSensorBase):
     """Sensor showing AI recommendation for a room."""
 
     _attr_native_unit_of_measurement = PERCENTAGE
@@ -178,7 +193,7 @@ class RoomAIRecommendationSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class RoomFanSpeedSensor(CoordinatorEntity, SensorEntity):
+class RoomFanSpeedSensor(AirconManagerSensorBase):
     """Sensor showing current fan speed for a room."""
 
     _attr_native_unit_of_measurement = PERCENTAGE
@@ -204,7 +219,7 @@ class RoomFanSpeedSensor(CoordinatorEntity, SensorEntity):
         return room_states[self._room_name]["cover_position"]
 
 
-class AIOptimizationStatusSensor(CoordinatorEntity, SensorEntity):
+class AIOptimizationStatusSensor(AirconManagerSensorBase):
     """Sensor showing overall optimization status."""
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
@@ -283,7 +298,7 @@ class AIOptimizationStatusSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class AILastResponseSensor(CoordinatorEntity, SensorEntity):
+class AILastResponseSensor(AirconManagerSensorBase):
     """Sensor showing the last AI response for debugging."""
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
@@ -316,7 +331,7 @@ class AILastResponseSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class MainFanSpeedSensor(CoordinatorEntity, SensorEntity):
+class MainFanSpeedSensor(AirconManagerSensorBase):
     """Sensor showing the main aircon fan speed set by AI."""
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
@@ -370,7 +385,7 @@ class MainFanSpeedSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class MainFanSpeedRecommendationSensor(CoordinatorEntity, SensorEntity):
+class MainFanSpeedRecommendationSensor(AirconManagerSensorBase):
     """Debug sensor showing the AI's recommendation for main fan speed."""
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
@@ -476,7 +491,7 @@ class MainFanSpeedRecommendationSensor(CoordinatorEntity, SensorEntity):
         return ", ".join(criteria)
 
 
-class SystemStatusDebugSensor(CoordinatorEntity, SensorEntity):
+class SystemStatusDebugSensor(AirconManagerSensorBase):
     """Debug sensor showing overall system status."""
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
@@ -525,7 +540,7 @@ class SystemStatusDebugSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class LastOptimizationTimeSensor(CoordinatorEntity, SensorEntity):
+class LastOptimizationTimeSensor(AirconManagerSensorBase):
     """Sensor showing when last optimization ran."""
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
@@ -577,7 +592,7 @@ class LastOptimizationTimeSensor(CoordinatorEntity, SensorEntity):
         return attrs
 
 
-class ErrorTrackingSensor(CoordinatorEntity, SensorEntity):
+class ErrorTrackingSensor(AirconManagerSensorBase):
     """Sensor tracking errors and warnings."""
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
@@ -607,7 +622,7 @@ class ErrorTrackingSensor(CoordinatorEntity, SensorEntity):
         }
 
 
-class ValidSensorsCountSensor(CoordinatorEntity, SensorEntity):
+class ValidSensorsCountSensor(AirconManagerSensorBase):
     """Sensor showing count of valid temperature sensors."""
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:

@@ -48,9 +48,16 @@ class AirconAIClimate(CoordinatorEntity, ClimateEntity):
         """Initialize the climate entity."""
         super().__init__(coordinator)
         self._optimizer = optimizer
+        self._config_entry = config_entry
         self._attr_unique_id = f"{config_entry.entry_id}_climate"
         self._attr_hvac_mode = HVACMode.AUTO
         self._is_on = True
+
+    @property
+    def device_info(self):
+        """Return device information."""
+        from . import get_device_info
+        return get_device_info(self._config_entry)
 
     @property
     def current_temperature(self) -> float | None:

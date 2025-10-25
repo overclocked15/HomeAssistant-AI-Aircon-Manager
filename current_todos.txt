@@ -1,0 +1,9 @@
+(DONE) Fix: Add temperature unit validation (Celsius/Fahrenheit)
+(IN PROGRESS) Fix: Make AI models configurable
+Fix: Add device_info to all entities
+Fix: Add entity availability checks before service calls
+Update manifest and commit
+Release v1.3.0
+
+Fix: Valid Sensors Count showing "0" at any given time
+Fix: Main Fan Speed AI Recommendation showing "no_valid_temps"

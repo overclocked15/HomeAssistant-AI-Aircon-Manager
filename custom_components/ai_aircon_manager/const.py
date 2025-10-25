@@ -23,6 +23,11 @@ CONF_ROOM_OVERRIDES = "room_overrides"
 AI_PROVIDER_CLAUDE = "claude"
 AI_PROVIDER_CHATGPT = "chatgpt"
 
+# AI Model configuration
+CONF_AI_MODEL = "ai_model"
+DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet-20241022"
+DEFAULT_CHATGPT_MODEL = "gpt-4-turbo-preview"
+
 # HVAC Modes
 HVAC_MODE_COOL = "cool"
 HVAC_MODE_HEAT = "heat"

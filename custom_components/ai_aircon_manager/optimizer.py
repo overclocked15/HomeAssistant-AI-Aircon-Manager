@@ -28,11 +28,13 @@ class AirconOptimizer:
         enable_notifications: bool = True,
         room_overrides: dict[str, Any] | None = None,
         config_entry: Any | None = None,
+        ai_model: str | None = None,
     ) -> None:
         """Initialize the optimizer."""
         self.hass = hass
         self.ai_provider = ai_provider
         self.api_key = api_key
+        self.ai_model = ai_model
         self.target_temperature = target_temperature
         self.room_configs = room_configs
         self.main_climate_entity = main_climate_entity
@@ -170,6 +172,24 @@ class AirconOptimizer:
             if temp_state and temp_state.state not in ["unknown", "unavailable", "none", None]:
                 try:
                     current_temp = float(temp_state.state)
+
+                    # Check and convert temperature unit if needed
+                    unit = temp_state.attributes.get("unit_of_measurement", "°C")
+                    if unit in ["°F", "fahrenheit", "F"]:
+                        # Convert Fahrenheit to Celsius
+                        current_temp = (current_temp - 32) * 5.0 / 9.0
+                        _LOGGER.debug(
+                            "Converted temperature for %s from Fahrenheit to Celsius: %.1f°C",
+                            room_name,
+                            current_temp,
+                        )
+                    elif unit not in ["°C", "celsius", "C"]:
+                        _LOGGER.warning(
+                            "Unknown temperature unit '%s' for %s (%s), assuming Celsius",
+                            unit,
+                            room_name,
+                            temp_sensor,
+                        )
                 except (ValueError, TypeError) as e:
                     _LOGGER.warning(
                         "Could not convert temperature for %s (%s): %s = %s",
@@ -215,15 +235,21 @@ class AirconOptimizer:
 
         try:
             if self.ai_provider == "claude":
+                # Use configured model or default
+                from .const import DEFAULT_CLAUDE_MODEL
+                model = self.ai_model or DEFAULT_CLAUDE_MODEL
                 response = await self._ai_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model=model,
                     max_tokens=1024,
                     messages=[{"role": "user", "content": prompt}],
                 )
                 ai_response = response.content[0].text
             else:  # chatgpt
+                # Use configured model or default
+                from .const import DEFAULT_CHATGPT_MODEL
+                model = self.ai_model or DEFAULT_CHATGPT_MODEL
                 response = await self._ai_client.chat.completions.create(
-                    model="gpt-4-turbo-preview",
+                    model=model,
                     messages=[{"role": "user", "content": prompt}],
                 )
                 ai_response = response.choices[0].message.content
@@ -342,6 +368,25 @@ Where recommended_fan_speed is an integer between 0 and 100.
 
             cover_entity = room_config["cover_entity"]
 
+            # Check if entity exists and is available
+            cover_state = self.hass.states.get(cover_entity)
+            if not cover_state:
+                _LOGGER.warning(
+                    "Cover entity %s for room %s not found, skipping",
+                    cover_entity,
+                    room_name,
+                )
+                continue
+
+            if cover_state.state in ["unavailable", "unknown"]:
+                _LOGGER.warning(
+                    "Cover entity %s for room %s is %s, skipping",
+                    cover_entity,
+                    room_name,
+                    cover_state.state,
+                )
+                continue
+
             # Set the cover position
             try:
                 await self.hass.services.async_call(
@@ -423,6 +468,20 @@ Where recommended_fan_speed is an integer between 0 and 100.
                 avg_deviation,
                 temp_variance,
             )
+
+        # Check if entity exists and is available
+        fan_state = self.hass.states.get(self.main_fan_entity)
+        if not fan_state:
+            _LOGGER.warning("Main fan entity %s not found", self.main_fan_entity)
+            return fan_speed
+
+        if fan_state.state in ["unavailable", "unknown"]:
+            _LOGGER.warning(
+                "Main fan entity %s is %s, skipping control",
+                self.main_fan_entity,
+                fan_state.state,
+            )
+            return fan_speed
 
         # Set the fan speed
         try:
