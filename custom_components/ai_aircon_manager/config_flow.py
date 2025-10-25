@@ -157,7 +157,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        # config_entry is already available as self.config_entry via parent class
         self._rooms = list(config_entry.data.get(CONF_ROOM_CONFIGS, []))
 
     async def async_step_init(
