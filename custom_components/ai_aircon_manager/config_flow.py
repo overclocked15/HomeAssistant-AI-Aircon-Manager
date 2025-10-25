@@ -27,6 +27,7 @@ from .const import (
     CONF_TEMPERATURE_DEADBAND,
     CONF_HVAC_MODE,
     CONF_AUTO_CONTROL_MAIN_AC,
+    CONF_AUTO_CONTROL_AC_TEMPERATURE,
     CONF_ENABLE_NOTIFICATIONS,
     CONF_ROOM_OVERRIDES,
     AI_PROVIDER_CLAUDE,
@@ -39,6 +40,7 @@ from .const import (
     DEFAULT_TEMPERATURE_DEADBAND,
     DEFAULT_HVAC_MODE,
     DEFAULT_AUTO_CONTROL_MAIN_AC,
+    DEFAULT_AUTO_CONTROL_AC_TEMPERATURE,
     DEFAULT_ENABLE_NOTIFICATIONS,
 )
 
@@ -237,6 +239,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_AUTO_CONTROL_MAIN_AC,
                         default=self.config_entry.data.get(
                             CONF_AUTO_CONTROL_MAIN_AC, DEFAULT_AUTO_CONTROL_MAIN_AC
+                        ),
+                    ): cv.boolean,
+                    vol.Optional(
+                        CONF_AUTO_CONTROL_AC_TEMPERATURE,
+                        default=self.config_entry.data.get(
+                            CONF_AUTO_CONTROL_AC_TEMPERATURE, DEFAULT_AUTO_CONTROL_AC_TEMPERATURE
                         ),
                     ): cv.boolean,
                     vol.Optional(

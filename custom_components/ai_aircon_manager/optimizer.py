@@ -25,6 +25,7 @@ class AirconOptimizer:
         temperature_deadband: float = 0.5,
         hvac_mode: str = "cool",
         auto_control_main_ac: bool = False,
+        auto_control_ac_temperature: bool = False,
         enable_notifications: bool = True,
         room_overrides: dict[str, Any] | None = None,
         config_entry: Any | None = None,
@@ -44,6 +45,7 @@ class AirconOptimizer:
         self.temperature_deadband = temperature_deadband
         self.hvac_mode = hvac_mode
         self.auto_control_main_ac = auto_control_main_ac
+        self.auto_control_ac_temperature = auto_control_ac_temperature
         self.enable_notifications = enable_notifications
         self.room_overrides = room_overrides or {}
         self.config_entry = config_entry
@@ -461,6 +463,63 @@ Key principles:
 - Balance the system: redistribute airflow to equalize temperatures
 - Goal is whole-home temperature equilibrium at target
 - Deadband: rooms within ±{self.temperature_deadband}°C are acceptable
+"""
+
+        # Add AC temperature control section if enabled
+        if self.auto_control_ac_temperature and self.main_climate_entity:
+            if self.hvac_mode == "heat":
+                temp_control_guidance = """
+AC Temperature Control (HEATING MODE):
+
+You must also recommend the optimal main AC temperature setpoint. Consider:
+
+1. AGGRESSIVE HEATING (rooms 2°C+ below target):
+   - Set AC to 24-26°C (warmer setpoint for faster heating)
+
+2. MODERATE HEATING (rooms 0.5-2°C below target):
+   - Set AC to 22-24°C (balanced heating)
+
+3. MAINTENANCE MODE (most rooms near target):
+   - Set AC to 20-22°C (maintain comfort without overheating)
+
+The AC setpoint should be higher than your target room temperature to ensure adequate heating capacity.
+Adjust based on how far rooms are from target and outdoor conditions.
+"""
+            else:  # cooling
+                temp_control_guidance = """
+AC Temperature Control (COOLING MODE):
+
+You must also recommend the optimal main AC temperature setpoint. Consider:
+
+1. AGGRESSIVE COOLING (rooms 2°C+ above target):
+   - Set AC to 18-20°C (cooler setpoint for faster cooling)
+
+2. MODERATE COOLING (rooms 0.5-2°C above target):
+   - Set AC to 20-22°C (balanced cooling)
+
+3. MAINTENANCE MODE (most rooms near target):
+   - Set AC to 22-24°C (maintain comfort without overcooling)
+
+The AC setpoint should be lower than your target room temperature to ensure adequate cooling capacity.
+Adjust based on how far rooms are from target and outdoor conditions.
+"""
+
+            prompt += f"""
+{temp_control_guidance}
+
+Respond ONLY with a JSON object in this exact format (no other text):
+{{
+  "room_name_1": recommended_fan_speed,
+  "room_name_2": recommended_fan_speed,
+  "ac_temperature": recommended_ac_temperature
+}}
+
+Where:
+- recommended_fan_speed is an integer between 0 and 100
+- recommended_ac_temperature is an integer temperature in Celsius (typically 18-26°C)
+"""
+        else:
+            prompt += """
 
 Respond ONLY with a JSON object in this exact format (no other text):
 {{
@@ -470,12 +529,13 @@ Respond ONLY with a JSON object in this exact format (no other text):
 
 Where recommended_fan_speed is an integer between 0 and 100.
 """
+
         return prompt
 
     def _parse_ai_response(
         self, ai_response: str, room_states: dict[str, dict[str, Any]]
-    ) -> dict[str, int]:
-        """Parse AI response to extract cover positions."""
+    ) -> dict[str, int | float]:
+        """Parse AI response to extract cover positions and optionally AC temperature."""
         import json
         import re
 
@@ -490,6 +550,13 @@ Where recommended_fan_speed is an integer between 0 and 100.
                     if room_name in recommendations:
                         position = int(recommendations[room_name])
                         validated[room_name] = max(0, min(100, position))
+
+                # Extract AC temperature if present
+                if "ac_temperature" in recommendations:
+                    ac_temp = float(recommendations["ac_temperature"])
+                    # Clamp to reasonable range (16-30°C)
+                    validated["ac_temperature"] = max(16, min(30, ac_temp))
+
                 return validated
         except Exception as e:
             _LOGGER.error("Error parsing AI response: %s", e)
@@ -497,9 +564,17 @@ Where recommended_fan_speed is an integer between 0 and 100.
 
         return {}
 
-    async def _apply_recommendations(self, recommendations: dict[str, int]) -> None:
-        """Apply the recommended cover positions (respecting room overrides)."""
+    async def _apply_recommendations(self, recommendations: dict[str, int | float]) -> None:
+        """Apply the recommended cover positions and AC temperature (respecting room overrides)."""
+        # First, handle AC temperature if present and enabled
+        if "ac_temperature" in recommendations and self.auto_control_ac_temperature and self.main_climate_entity:
+            await self._set_ac_temperature(recommendations["ac_temperature"])
+
+        # Then apply room fan speeds
         for room_name, position in recommendations.items():
+            # Skip the ac_temperature key
+            if room_name == "ac_temperature":
+                continue
             # Check if this room is disabled via override
             room_override = self.room_overrides.get(f"{room_name}_enabled")
             if room_override is False:
@@ -856,6 +931,51 @@ Where recommended_fan_speed is an integer between 0 and 100.
             self._last_error = f"AC Control Error: {e}"
             self._error_count += 1
             await self._send_notification("AC Control Error", f"Failed to control main AC: {e}")
+
+    async def _set_ac_temperature(self, temperature: float) -> None:
+        """Set the main AC temperature setpoint."""
+        if not self.main_climate_entity:
+            return
+
+        try:
+            # Get current climate state to check if temperature needs changing
+            climate_state = self.hass.states.get(self.main_climate_entity)
+            if not climate_state:
+                _LOGGER.warning("Main climate entity %s not found", self.main_climate_entity)
+                return
+
+            # Get current temperature setting
+            current_temp = climate_state.attributes.get("temperature")
+
+            # Only update if temperature has changed significantly (more than 0.5°C difference)
+            if current_temp is not None and abs(current_temp - temperature) < 0.5:
+                _LOGGER.debug(
+                    "Skipping AC temperature update - current: %.1f°C, target: %.1f°C (difference < 0.5°C)",
+                    current_temp,
+                    temperature
+                )
+                return
+
+            _LOGGER.info(
+                "Setting main AC temperature to %.1f°C (was %.1f°C)",
+                temperature,
+                current_temp if current_temp is not None else 0
+            )
+
+            await self.hass.services.async_call(
+                "climate",
+                "set_temperature",
+                {
+                    "entity_id": self.main_climate_entity,
+                    "temperature": temperature
+                },
+                blocking=True,
+            )
+
+        except Exception as e:
+            _LOGGER.error("Error setting AC temperature: %s", e)
+            self._last_error = f"AC Temperature Control Error: {e}"
+            self._error_count += 1
 
     async def _send_notification(self, title: str, message: str) -> None:
         """Send a persistent notification to Home Assistant."""
