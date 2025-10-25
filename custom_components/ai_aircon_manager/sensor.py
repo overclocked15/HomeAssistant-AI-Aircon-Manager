@@ -41,29 +41,43 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the AI Aircon Manager sensor platform."""
+    _LOGGER.info("Setting up AI Aircon Manager sensor platform")
+
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     optimizer = hass.data[DOMAIN][config_entry.entry_id]["optimizer"]
+
+    _LOGGER.info("Room configs: %s", optimizer.room_configs)
 
     entities = []
 
     # Add room-specific diagnostic sensors
     for room_config in optimizer.room_configs:
         room_name = room_config["room_name"]
+        _LOGGER.info("Creating sensors for room: %s", room_name)
 
         # Temperature difference sensor
-        entities.append(
-            RoomTemperatureDifferenceSensor(coordinator, config_entry, room_name)
-        )
+        try:
+            sensor = RoomTemperatureDifferenceSensor(coordinator, config_entry, room_name)
+            entities.append(sensor)
+            _LOGGER.info("Created RoomTemperatureDifferenceSensor for %s", room_name)
+        except Exception as e:
+            _LOGGER.error("Failed to create RoomTemperatureDifferenceSensor for %s: %s", room_name, e, exc_info=True)
 
         # AI recommendation sensor
-        entities.append(
-            RoomAIRecommendationSensor(coordinator, config_entry, room_name)
-        )
+        try:
+            sensor = RoomAIRecommendationSensor(coordinator, config_entry, room_name)
+            entities.append(sensor)
+            _LOGGER.info("Created RoomAIRecommendationSensor for %s", room_name)
+        except Exception as e:
+            _LOGGER.error("Failed to create RoomAIRecommendationSensor for %s: %s", room_name, e, exc_info=True)
 
         # Fan speed sensor
-        entities.append(
-            RoomFanSpeedSensor(coordinator, config_entry, room_name)
-        )
+        try:
+            sensor = RoomFanSpeedSensor(coordinator, config_entry, room_name)
+            entities.append(sensor)
+            _LOGGER.info("Created RoomFanSpeedSensor for %s", room_name)
+        except Exception as e:
+            _LOGGER.error("Failed to create RoomFanSpeedSensor for %s: %s", room_name, e, exc_info=True)
 
     # Add overall status sensor
     entities.append(AIOptimizationStatusSensor(coordinator, config_entry))
@@ -85,7 +99,11 @@ async def async_setup_entry(
     if optimizer.main_fan_entity:
         entities.append(MainFanSpeedRecommendationSensor(coordinator, config_entry))
 
+    _LOGGER.info("Total entities to add: %d", len(entities))
+    _LOGGER.info("Entity unique_ids: %s", [e.unique_id for e in entities if hasattr(e, 'unique_id')])
+
     async_add_entities(entities)
+    _LOGGER.info("Entities added successfully")
 
 
 class RoomTemperatureDifferenceSensor(AirconManagerSensorBase):
