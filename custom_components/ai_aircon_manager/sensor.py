@@ -318,7 +318,7 @@ class AIOptimizationStatusSensor(AirconManagerSensorBase):
             "temperature_variance": round(temp_variance, 1),
             "rooms_count": len(room_states),
             "recommendations_count": len(recommendations),
-            "last_update": self.coordinator.last_update_success_time,
+            "last_update_success": self.coordinator.last_update_success,
         }
 
 
@@ -662,7 +662,6 @@ class ErrorTrackingSensor(AirconManagerSensorBase):
 
         return {
             "last_error": self.coordinator.data.get("last_error"),
-            "last_error_time": self.coordinator.last_update_success_time if self.coordinator.data.get("last_error") else None,
             "status": "errors_present" if self.coordinator.data.get("error_count", 0) > 0 else "no_errors",
         }
 
