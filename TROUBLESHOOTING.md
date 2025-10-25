@@ -47,6 +47,40 @@ If issues persist, check the entity registry file:
 4. Remove duplicate entries (backup first!)
 5. Restart Home Assistant
 
+### Diagnostic: Check Your Setup
+
+To diagnose why duplicates keep appearing, check your logs:
+
+1. **Enable Debug Logging** (see section below)
+2. **Restart Home Assistant**
+3. **Check the logs** for these lines during startup:
+   ```
+   Setting up AI Aircon Manager sensor platform for entry_id: <YOUR_ENTRY_ID>
+   Total entities to add: <NUMBER>
+   Entity unique_ids: [list of unique IDs]
+   ```
+
+4. **Look for**:
+   - **Multiple entry_ids**: If you see the setup message twice with different entry_ids, you have multiple instances
+   - **Duplicate unique_ids**: If the same unique_id appears more than once, that's causing the `_2` suffix
+
+**Example of problem:**
+```
+Setting up AI Aircon Manager sensor platform for entry_id: abc123...
+Total entities to add: 15
+
+Setting up AI Aircon Manager sensor platform for entry_id: def456...  ← DUPLICATE INSTANCE!
+Total entities to add: 15
+```
+
+**What to look for in entity unique_ids:**
+Each unique_id should follow this pattern:
+- `<entry_id>_<room_name>_temp_diff`
+- `<entry_id>_<room_name>_ai_recommendation`
+- `<entry_id>_ai_optimization_status`
+
+If you see the same pattern with different entry_ids, you have multiple integration instances.
+
 ### Prevention
 - Only set up the integration once
 - Don't manually reload the integration repeatedly

@@ -102,6 +102,11 @@ async def async_setup_entry(
     if optimizer.main_fan_entity:
         entities.append(MainFanSpeedRecommendationSensor(coordinator, config_entry))
 
+    # Add AC temperature control sensors if auto control is enabled
+    if optimizer.auto_control_ac_temperature and optimizer.main_climate_entity:
+        entities.append(ACTemperatureRecommendationSensor(coordinator, config_entry))
+        entities.append(ACCurrentTemperatureSensor(coordinator, config_entry))
+
     _LOGGER.info("Total entities to add: %d", len(entities))
     _LOGGER.info("Entity unique_ids: %s", [e.unique_id for e in entities if hasattr(e, 'unique_id')])
 
@@ -756,3 +761,123 @@ class ValidSensorsCountSensor(AirconManagerSensorBase):
             "percentage_valid": round((self.native_value / total_rooms * 100), 1) if total_rooms > 0 else 0,
             "sensor_temperatures": sensor_temps,
         }
+
+
+class ACTemperatureRecommendationSensor(AirconManagerSensorBase):
+    """Sensor showing AI's recommended AC temperature."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_ac_temp_recommendation"
+        self._attr_name = "AC Temperature Recommendation"
+        self._attr_icon = "mdi:thermostat-auto"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the AI's recommended AC temperature."""
+        if not self.coordinator.data:
+            return None
+
+        recommendations = self.coordinator.data.get("recommendations", {})
+        return recommendations.get("ac_temperature")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if not self.coordinator.data:
+            return {}
+
+        room_states = self.coordinator.data.get("room_states", {})
+
+        # Calculate average room temperature and deviation from target
+        temps = [s.get("current_temperature") for s in room_states.values() if s.get("current_temperature") is not None]
+        avg_temp = sum(temps) / len(temps) if temps else None
+
+        # Get target temperature from first room (they all use the same target)
+        target_temp = None
+        for state in room_states.values():
+            if state.get("target_temperature") is not None:
+                target_temp = state.get("target_temperature")
+                break
+
+        attrs = {
+            "average_room_temperature": round(avg_temp, 1) if avg_temp else None,
+            "target_temperature": target_temp,
+            "has_recommendation": self.native_value is not None,
+        }
+
+        if avg_temp and target_temp:
+            deviation = avg_temp - target_temp
+            attrs["temperature_deviation"] = round(deviation, 1)
+
+            # Determine control mode
+            if deviation > 2:
+                attrs["control_mode"] = "aggressive_cooling" if avg_temp > target_temp else "aggressive_heating"
+            elif abs(deviation) > 0.5:
+                attrs["control_mode"] = "moderate"
+            else:
+                attrs["control_mode"] = "maintenance"
+
+        return attrs
+
+
+class ACCurrentTemperatureSensor(AirconManagerSensorBase):
+    """Sensor showing current AC temperature setpoint."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_ac_current_temp"
+        self._attr_name = "AC Current Temperature"
+        self._attr_icon = "mdi:thermostat"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current AC temperature setpoint."""
+        if not self.coordinator.data:
+            return None
+
+        main_climate = self.coordinator.data.get("main_climate_state")
+        if not main_climate:
+            return None
+
+        return main_climate.get("temperature")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if not self.coordinator.data:
+            return {}
+
+        main_climate = self.coordinator.data.get("main_climate_state")
+        if not main_climate:
+            return {"status": "no_climate_data"}
+
+        recommendations = self.coordinator.data.get("recommendations", {})
+        recommended_temp = recommendations.get("ac_temperature")
+        current_temp = main_climate.get("temperature")
+
+        attrs = {
+            "hvac_mode": main_climate.get("hvac_mode"),
+            "hvac_action": main_climate.get("hvac_action"),
+            "recommended_temperature": recommended_temp,
+        }
+
+        # Calculate if temperature needs updating
+        if current_temp and recommended_temp:
+            temp_diff = abs(current_temp - recommended_temp)
+            attrs["temperature_difference"] = round(temp_diff, 1)
+            attrs["needs_update"] = temp_diff >= 0.5
+        else:
+            attrs["needs_update"] = False
+
+        return attrs
