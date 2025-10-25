@@ -403,14 +403,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # Build schema with a checkbox for each room
         schema_dict = {}
         for room in current_rooms:
-            room_name = room[CONF_ROOM_NAME]
+            # Safely get room_name with error handling
+            room_name = room.get(CONF_ROOM_NAME)
+            if not room_name:
+                _LOGGER.warning("Room missing name in config: %s", room)
+                continue
+
             # Default to enabled (True) if not in overrides
             # current_overrides is flat: {"Living Room_enabled": False}
             is_enabled = current_overrides.get(f"{room_name}_enabled", True)
             schema_dict[vol.Optional(f"{room_name}_enabled", default=is_enabled)] = cv.boolean
 
         if not schema_dict:
-            # No rooms configured
+            # No rooms configured or all rooms missing names
+            _LOGGER.error("No valid rooms found for room overrides")
             return await self.async_step_init()
 
         return self.async_show_form(

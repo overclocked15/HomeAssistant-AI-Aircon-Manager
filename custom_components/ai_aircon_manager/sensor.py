@@ -41,7 +41,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the AI Aircon Manager sensor platform."""
-    _LOGGER.info("Setting up AI Aircon Manager sensor platform")
+    _LOGGER.info(
+        "Setting up AI Aircon Manager sensor platform for entry_id: %s",
+        config_entry.entry_id
+    )
 
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     optimizer = hass.data[DOMAIN][config_entry.entry_id]["optimizer"]
