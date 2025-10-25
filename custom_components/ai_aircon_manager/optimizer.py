@@ -234,10 +234,10 @@ Key principles:
 - Consider the deadband: rooms within ±{self.temperature_deadband}°C are acceptable
 
 Respond ONLY with a JSON object in this exact format (no other text):
-{
+{{
   "room_name_1": recommended_fan_speed,
   "room_name_2": recommended_fan_speed
-}
+}}
 
 Where recommended_fan_speed is an integer between 0 and 100.
 """
