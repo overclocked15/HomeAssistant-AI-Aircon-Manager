@@ -386,8 +386,41 @@ class MainFanSpeedRecommendationSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return "unknown"
 
-        main_fan_speed = self.coordinator.data.get("main_fan_speed", "unknown")
-        return main_fan_speed if main_fan_speed else "not_calculated"
+        # First check if optimizer calculated it
+        main_fan_speed = self.coordinator.data.get("main_fan_speed")
+        if main_fan_speed:
+            return main_fan_speed
+
+        # Otherwise calculate it ourselves for debug purposes
+        room_states = self.coordinator.data.get("room_states", {})
+        temps = [
+            state["current_temperature"]
+            for state in room_states.values()
+            if state["current_temperature"] is not None
+        ]
+
+        if not temps:
+            return "no_valid_temps"
+
+        # Get target temp from first room (they all share same target)
+        target_temp = next(iter(room_states.values()))["target_temperature"] if room_states else None
+        if not target_temp:
+            return "no_target_temp"
+
+        # Calculate fan speed using same logic as optimizer
+        avg_temp = sum(temps) / len(temps)
+        max_temp = max(temps)
+        min_temp = min(temps)
+        temp_variance = max_temp - min_temp
+        avg_deviation = abs(avg_temp - target_temp)
+        max_deviation = max(abs(temp - target_temp) for temp in temps)
+
+        if temp_variance <= 1.0 and avg_deviation <= 0.5:
+            return "low"
+        elif max_deviation >= 3.0 or temp_variance >= 3.0:
+            return "high"
+        else:
+            return "medium"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
