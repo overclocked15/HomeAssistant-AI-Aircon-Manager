@@ -117,7 +117,9 @@ class RoomTemperatureDifferenceSensor(AirconManagerSensorBase):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
         self._room_name = room_name
-        self._attr_unique_id = f"{config_entry.entry_id}_{room_name}_temp_diff"
+        # Normalize room name for unique_id (replace spaces with underscores, lowercase)
+        room_id = room_name.lower().replace(" ", "_")
+        self._attr_unique_id = f"{config_entry.entry_id}_{room_id}_temp_diff"
         self._attr_name = f"{room_name} Temperature Difference"
 
     @property
@@ -169,7 +171,9 @@ class RoomAIRecommendationSensor(AirconManagerSensorBase):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
         self._room_name = room_name
-        self._attr_unique_id = f"{config_entry.entry_id}_{room_name}_ai_recommendation"
+        # Normalize room name for unique_id (replace spaces with underscores, lowercase)
+        room_id = room_name.lower().replace(" ", "_")
+        self._attr_unique_id = f"{config_entry.entry_id}_{room_id}_ai_recommendation"
         self._attr_name = f"{room_name} AI Recommendation"
 
     @property
@@ -221,7 +225,9 @@ class RoomFanSpeedSensor(AirconManagerSensorBase):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
         self._room_name = room_name
-        self._attr_unique_id = f"{config_entry.entry_id}_{room_name}_fan_speed"
+        # Normalize room name for unique_id (replace spaces with underscores, lowercase)
+        room_id = room_name.lower().replace(" ", "_")
+        self._attr_unique_id = f"{config_entry.entry_id}_{room_id}_fan_speed"
         self._attr_name = f"{room_name} Fan Speed"
 
     @property
