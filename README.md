@@ -4,25 +4,47 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
 
 ## Features
 
+### Core Capabilities
 - **AI-Powered Management**: Uses Claude or ChatGPT to intelligently manage zone fan speeds
 - **Multi-Room Support**: Configure multiple rooms with individual temperature sensors and zone controls
 - **Temperature Equalization**: Automatically balances temperatures across all rooms
 - **Smart Redistribution**: Increases fan speed in hot rooms, reduces in cold rooms to equalize
 - **Main Aircon Fan Control**: Automatically adjusts your main AC unit's fan speed (low/medium/high) based on system needs
+- **Automatic AC On/Off Control**: Can automatically turn your main AC on/off based on need with hysteresis
+- **Automatic AC Temperature Control**: Can automatically control your main AC's temperature setpoint for fully hands-off operation
 - **Comprehensive Diagnostics**: Detailed sensors for monitoring and troubleshooting
 - **Climate Entity**: Provides a climate entity to view overall system status and set target temperature
 - **Flexible Configuration**: Easy UI-based setup through Home Assistant config flow with options to reconfigure
+
+### Cost Optimization (v1.7.0+)
+- **Cheaper AI Models**: Support for Claude Haiku (85% cheaper) and GPT-4o Mini (85% cheaper)
+- **Smart Skipping**: Automatically skips AI calls when all rooms are stable (within deadband)
+- **AC-Off Optimization**: Skips AI calls when AC is off, reuses last recommendations
+- **Potential Savings**: 70-90% reduction in AI API costs
+
+### Advanced Features
+- **Room Overrides**: Disable AI control for specific rooms while keeping others active
+- **Heating/Cooling Modes**: Support for both heating and cooling with mode-aware optimizations
+- **HVAC Mode Auto-Detection**: Can automatically detect heating/cooling from main climate entity
+- **Hysteresis Control**: Prevents rapid AC on/off cycling with configurable thresholds
+- **Startup Delay**: Grace period during Home Assistant startup to prevent false alarms
+- **Persistent Notifications**: Optional notifications for important events (AC control, errors)
 
 ## How It Works
 
 1. The integration monitors temperature sensors in each configured room
 2. Every 5 minutes (configurable), it analyzes all room temperatures against the target
-3. The AI determines optimal zone fan speeds to equalize temperatures:
+3. **Cost Optimization Checks**:
+   - If all rooms are stable (within deadband) → Skip AI, reuse last recommendations
+   - If AC is off → Skip AI, reuse last recommendations
+   - If checks pass → Proceed with AI optimization
+4. The AI determines optimal zone fan speeds to equalize temperatures:
    - **Too hot?** Increases zone fan speed (75-100%) to cool faster
    - **Too cold?** Decreases zone fan speed (25-50%) to reduce cooling
    - **At target?** Maintains balanced fan speeds (70-80%) across all zones
-4. This creates a temperature equilibrium across your entire house
-5. The system continuously adjusts to maintain the target temperature efficiently
+5. **Optional**: AI can also recommend optimal AC temperature setpoint
+6. This creates a temperature equilibrium across your entire house
+7. The system continuously adjusts to maintain the target temperature efficiently
 
 ## Prerequisites
 
@@ -32,6 +54,12 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
 - API key for either:
   - Anthropic Claude (get from https://console.anthropic.com/)
   - OpenAI ChatGPT (get from https://platform.openai.com/)
+
+### API Costs
+With cost optimizations enabled (Claude Haiku or GPT-4o Mini):
+- **Typical usage**: $1-2/month
+- **Heavy usage**: $2-4/month
+- See [Cost Optimization](#cost-optimization) section for details
 
 ## Installation
 
@@ -61,11 +89,16 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
            ├── const.py
            ├── manifest.json
            ├── optimizer.py
-           └── strings.json
+           ├── sensor.py
+           ├── binary_sensor.py
+           └── translations/
+               └── en.json
    ```
 4. Restart Home Assistant
 
 ## Configuration
+
+### Initial Setup
 
 1. Go to **Settings** → **Devices & Services**
 2. Click **Add Integration**
@@ -91,8 +124,21 @@ You can change settings after initial setup:
 1. Go to **Settings** → **Devices & Services**
 2. Find "AI Aircon Manager" and click **Configure**
 3. Choose what you want to configure:
-   - **Change Settings**: Update target temperature, main climate entity, main fan entity
+   - **Change Settings**: Update target temperature, AI model, HVAC mode, main climate entity, etc.
    - **Manage Rooms**: Add or remove rooms
+   - **Room Overrides**: Enable/disable AI control for specific rooms
+
+#### Key Settings
+
+**In "Change Settings":**
+- **Target Temperature**: Your desired comfort temperature
+- **Temperature Deadband**: Acceptable range (±) from target before taking action (default: 0.5°C)
+- **Update Interval**: How often AI runs optimization (default: 5 minutes)
+- **HVAC Mode**: Cooling, Heating, or Auto (detect from main climate)
+- **AI Model**: Choose between premium (Sonnet/GPT-4) or cost-effective (Haiku/Mini) models
+- **Automatically turn main AC on/off**: Enable automatic AC control with hysteresis
+- **Automatically control AC temperature**: Enable full automation of AC temperature setpoint
+- **Enable notifications**: Get notified of important events
 
 #### Adding/Removing Rooms
 
@@ -106,6 +152,77 @@ To add new rooms (e.g., after installing new zones or sensors):
    - **Done**: Return to the main menu
 
 **Note**: The integration automatically reloads after adding or removing rooms, and new diagnostic sensors are created for newly added rooms.
+
+#### Room Overrides
+
+To disable AI control for specific rooms:
+
+1. Go to **Settings** → **Devices & Services** → **AI Aircon Manager** → **Configure**
+2. Select **"Room Overrides"**
+3. **Uncheck** any rooms you want to exclude from AI control
+4. Those rooms will keep their last fan speed but won't be adjusted by AI
+
+## Cost Optimization
+
+### Choose a Cost-Effective Model
+
+The biggest cost savings comes from switching to cheaper AI models:
+
+**Claude Users:**
+- **Claude 3.5 Haiku** (~85% cheaper than Sonnet) - **RECOMMENDED**
+
+**OpenAI Users:**
+- **GPT-4o Mini** (~85% cheaper than GPT-4 Turbo) - **RECOMMENDED**
+
+**How to Switch:**
+1. Go to Settings → Devices & Services → AI Aircon Manager → Configure
+2. Select "Change Settings"
+3. Find "AI Model" dropdown
+4. Select Haiku (Claude) or Mini (OpenAI)
+5. Save
+
+**Performance**: Haiku and GPT-4o Mini are more than capable for HVAC control. You won't notice quality differences, but you'll see major cost savings!
+
+### Automatic Optimizations
+
+The integration automatically reduces costs by:
+
+1. **Skipping AI when rooms are stable**
+   - When ALL rooms are within deadband of target
+   - Reuses last recommendations
+   - Saves 30-50% of calls during stable periods
+
+2. **Skipping AI when AC is off**
+   - No point in calling AI when AC isn't running
+   - Reuses last recommendations
+   - Saves calls during off periods
+
+### Adjust Settings for More Savings
+
+**Increase Update Interval:**
+- Default: 5 minutes (12 calls/hour)
+- Change to 10 minutes: 6 calls/hour (50% reduction)
+- Change to 15 minutes: 4 calls/hour (67% reduction)
+
+**Increase Temperature Deadband:**
+- Default: ±0.5°C (tight control, more AI calls)
+- Change to ±1.0°C: Looser control, more skipping opportunities
+
+### Expected Costs
+
+**With Claude Haiku or GPT-4o Mini + Optimizations:**
+
+Typical residential use (AC running 12 hours/day):
+- **Monthly cost**: $1-2/month
+- **Yearly cost**: $12-24/year
+
+Heavy use (AC running 20 hours/day):
+- **Monthly cost**: $2-4/month
+- **Yearly cost**: $24-48/year
+
+**Savings vs Premium Models:**
+- Claude Sonnet: ~$10-15/month → Haiku: ~$1-2/month (85% savings)
+- GPT-4 Turbo: ~$12-18/month → GPT-4o Mini: ~$1-2/month (90% savings)
 
 ## Usage
 
@@ -129,28 +246,38 @@ The climate entity includes additional attributes:
 
 ### Diagnostic Sensors
 
-The integration creates several diagnostic sensors for each room to help you troubleshoot and monitor the system:
+The integration creates comprehensive diagnostic sensors:
 
-**Per-Room Sensors:**
-- `sensor.{room_name}_temperature_difference` - Shows how many degrees the room is from target
-  - Attributes include status: `too_hot`, `too_cold`, or `at_target`
-- `sensor.{room_name}_ai_recommendation` - Shows the AI's recommended fan speed for this room
-  - Attributes show current vs recommended speed and the change being made
+#### Per-Room Sensors
+- `sensor.{room_name}_temperature_difference` - How many degrees from target
+  - Attributes: status (`too_hot`, `too_cold`, `at_target`)
+- `sensor.{room_name}_ai_recommendation` - AI's recommended fan speed
+  - Attributes: current vs recommended speed, change being made
 - `sensor.{room_name}_fan_speed` - Current fan speed percentage
 
-**Overall System Sensors:**
-- `sensor.ai_optimization_status` - Overall system status
-  - Values: `maintaining`, `equalizing`, `cooling`, `reducing_cooling`
-  - Attributes include temperature variance, min/max temps, average temp
-- `sensor.ai_last_response` - Shows the last AI response for debugging
-  - Attributes include the raw AI response text for troubleshooting
-- `sensor.main_aircon_fan_speed` - *(Optional)* Shows current main fan speed set by AI
-  - Values: `low`, `medium`, `high`
-  - Only created if you configured a main fan entity
-  - Attributes show the logic used to determine speed
-- `binary_sensor.main_aircon_running` - *(Optional)* Shows if your main aircon is running
-  - Only created if you configured a main climate entity
-  - Attributes show HVAC mode, action, and temperatures
+#### Overall System Sensors
+- `sensor.ai_optimization_status` - System status (`maintaining`, `equalizing`, `cooling`, etc.)
+  - Attributes: temperature variance, min/max temps, average temp
+- `sensor.ai_last_response` - Last AI response for debugging
+- `sensor.last_data_update_time` - When coordinator last polled (every ~30s)
+- `sensor.last_ai_optimization` - When AI actually last ran (per your interval)
+- `sensor.next_ai_optimization_time` - When AI will run next (with countdown)
+- `sensor.error_tracking` - Error count and details
+- `sensor.valid_sensors_count` - How many temperature sensors are working
+- `sensor.system_status_debug` - Overall system health
+
+#### AC Temperature Control Sensors (if enabled)
+- `sensor.ac_temperature_recommendation` - AI's recommended AC temperature
+  - Attributes: average room temp, deviation, control mode
+- `sensor.ac_current_temperature` - Current AC temperature setpoint
+  - Attributes: HVAC mode/action, recommended vs current, needs_update
+
+#### Main Fan Sensors (if configured)
+- `sensor.main_aircon_fan_speed` - Current main fan speed (`low`, `medium`, `high`)
+  - Attributes: logic used to determine speed
+- `sensor.main_fan_speed_recommendation` - AI's recommended main fan speed
+- `binary_sensor.main_aircon_running` - Whether main AC is running
+  - Attributes: HVAC mode, action, temperatures
 
 ### Main Aircon Fan Control Logic
 
@@ -166,6 +293,36 @@ When you configure a main aircon fan entity, the integration automatically adjus
   - Moderate cooling or temperature equalization in progress
 
 This ensures your main AC fan operates efficiently - running on low when just maintaining, and ramping up when aggressive cooling is needed.
+
+### Automatic AC Control
+
+#### AC On/Off Control
+
+When enabled, the integration can automatically turn your main AC on/off:
+
+**Turn On When:**
+- Average room temperature ≥ target + 1.0°C (cooling mode)
+- Average room temperature ≤ target - 1.0°C (heating mode)
+
+**Turn Off When:**
+- Average room temperature ≤ target - 2.0°C (cooling mode)
+- Average room temperature ≥ target + 2.0°C (heating mode)
+
+This hysteresis prevents rapid on/off cycling.
+
+#### AC Temperature Control (Fully Automatic Mode)
+
+When enabled, AI automatically sets your AC's temperature setpoint:
+
+**Cooling Mode:**
+- Aggressive cooling (rooms 2°C+ too hot): Sets AC to 18-20°C
+- Moderate cooling (rooms 0.5-2°C too hot): Sets AC to 20-22°C
+- Maintenance (rooms near target): Sets AC to 22-24°C
+
+**Heating Mode:**
+- Aggressive heating (rooms 2°C+ too cold): Sets AC to 24-26°C
+- Moderate heating (rooms 0.5-2°C too cold): Sets AC to 22-24°C
+- Maintenance (rooms near target): Sets AC to 20-22°C
 
 ### Automation Example
 
@@ -198,74 +355,86 @@ The AI receives information about each room:
 
 **The AI's strategy is to equalize temperatures across your entire house:**
 
-### Equalizing Phase (Different room temperatures)
+### Cooling Mode
+
+**Equalizing Phase (Different room temperatures):**
 - **Rooms TOO HOT** (above target): AI sets zone fan to **HIGH** (75-100%)
   - Example: Bedroom is 25°C, target is 22°C → Set fan to 90%
 - **Rooms TOO COLD** (below target): AI sets zone fan to **LOW** (25-50%)
   - Example: Living room is 20°C, target is 22°C → Set fan to 35%
 - This redistributes cooling power to where it's needed most
 
-### Maintenance Phase (All rooms near target)
+**Maintenance Phase (All rooms near target):**
 - **All rooms at target**: AI sets balanced fan speeds (70-80%) for all zones
 - Makes small adjustments (±5-10%) to maintain equilibrium
 - Prevents energy waste while keeping comfortable temperatures
+
+### Heating Mode
+
+**Equalizing Phase:**
+- **Rooms TOO COLD** (below target): AI sets zone fan to **HIGH** (75-100%)
+- **Rooms TOO WARM** (above target): AI sets zone fan to **LOW** (25-50%)
+- Redistributes heating where needed
+
+**Maintenance Phase:**
+- Balanced fan speeds to maintain equilibrium
 
 ### Key Benefits
 - **Smart redistribution**: Hot room gets 100% fan speed, cold room gets 25%
 - **Whole-home balance**: Goal is entire house at desired temperature
 - **Gradual adjustments**: Typically 10-25% changes to avoid overshooting
 - **Continuous optimization**: Adapts to changing conditions throughout the day
+- **Cost-aware**: Skips AI calls when not needed, saving money
 
 ## Troubleshooting
 
-### Integration not appearing
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed troubleshooting steps.
+
+### Common Issues
+
+**Integration not appearing:**
 - Ensure you've copied all files correctly
 - Restart Home Assistant
 - Check `custom_components/ai_aircon_manager/manifest.json` exists
 
-### AI not making adjustments
+**AI not making adjustments:**
 - Check Home Assistant logs for errors
 - Verify API key is valid
 - Ensure zone fan controls are working (test manually first)
+- Check "Last AI Optimization" sensor to see when AI last ran
 
-### Fan speeds changing too frequently
-- Increase update interval in code (default: 5 minutes)
-- Check temperature sensor accuracy
-- Review AI recommendations in climate entity attributes
+**Duplicate entities with _2 suffix:**
+- See TROUBLESHOOTING.md for detailed diagnostic steps
+- Usually caused by multiple integration instances
+- Check Settings → Devices & Services for duplicate entries
 
-### Temperatures not equalizing
-- Verify all temperature sensors are accurate
-- Check that zone fan controls are actually controlling airflow
-- Review the AI recommendations to understand its logic
-- Consider if your HVAC system has sufficient capacity
+**AI running too frequently or not frequently enough:**
+- Check "Next AI Optimization Time" sensor
+- Enable debug logging to see timing checks
+- Verify "Last AI Optimization" vs "Last Data Update Time"
 
-## Advanced Configuration
+**High API costs:**
+- Switch to Haiku (Claude) or GPT-4o Mini (OpenAI) - 85% cheaper!
+- Increase update interval (Settings → Configure → Change Settings)
+- Increase temperature deadband for more stable periods
 
-### Changing Update Interval
+## Debug Logging
 
-Edit `__init__.py` and modify the `update_interval`:
+To enable detailed logging:
 
-```python
-coordinator = DataUpdateCoordinator(
-    hass,
-    _LOGGER,
-    name=DOMAIN,
-    update_method=optimizer.async_optimize,
-    update_interval=timedelta(minutes=10),  # Change from 5 to 10 minutes
-)
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.ai_aircon_manager: debug
 ```
 
-### Customizing AI Model
-
-Edit `optimizer.py` and change the model:
-
-```python
-# For Claude
-model="claude-3-5-sonnet-20241022",  # or claude-3-opus-20240229
-
-# For ChatGPT
-model="gpt-4-turbo-preview",  # or gpt-4, gpt-3.5-turbo
-```
+This will show:
+- AI optimization timing checks
+- Stability checks (when AI is skipped)
+- AC control decisions
+- Temperature setpoint changes
+- All diagnostic information
 
 ## Privacy & Security
 
@@ -276,7 +445,7 @@ model="gpt-4-turbo-preview",  # or gpt-4, gpt-3.5-turbo
 
 ## Support
 
-For issues or feature requests, please open an issue on GitHub.
+For issues or feature requests, please open an issue on GitHub: https://github.com/overclocked15/HomeAssistant-AI-Aircon-Manager/issues
 
 ## License
 
