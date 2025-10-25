@@ -532,44 +532,93 @@ Where recommended_fan_speed is an integer between 0 and 100.
         min_temp = min(temps)
         temp_variance = max_temp - min_temp
 
-        # Calculate average deviation from target
-        avg_deviation = abs(avg_temp - self.target_temperature)
-        max_deviation = max(
-            abs(temp - self.target_temperature)
-            for temp in temps
-        )
+        # Calculate average deviation from target (with direction)
+        avg_temp_diff = avg_temp - self.target_temperature  # Positive = too hot, Negative = too cold
+        avg_deviation = abs(avg_temp_diff)
+        max_temp_diff = max(temp - self.target_temperature for temp in temps)
+        min_temp_diff = min(temp - self.target_temperature for temp in temps)
+        max_deviation = max(abs(max_temp_diff), abs(min_temp_diff))
 
-        # Determine fan speed based on conditions
-        # Low: All rooms at or near target (maintaining)
-        # Medium: Some variation but not extreme (equalizing/gentle cooling)
-        # High: Significant deviation or high variance (aggressive cooling needed)
+        # Determine fan speed based on conditions and HVAC mode
+        # In COOL mode:
+        #   - If temps above target: Need cooling (higher fan)
+        #   - If temps below target: Don't need cooling (lower fan)
+        # In HEAT mode:
+        #   - If temps below target: Need heating (higher fan)
+        #   - If temps above target: Don't need heating (lower fan)
 
         fan_speed = "medium"  # default
 
+        # Check if at target (maintaining)
         if temp_variance <= 1.0 and avg_deviation <= 0.5:
-            # Maintaining: All rooms close to target, minimal variance
             fan_speed = "low"
             _LOGGER.info(
                 "Main fan -> LOW: Maintaining (variance: %.1f°C, avg deviation: %.1f°C)",
                 temp_variance,
                 avg_deviation,
             )
-        elif max_deviation >= 3.0 or temp_variance >= 3.0:
-            # Aggressive cooling: Large deviation or high variance
-            fan_speed = "high"
-            _LOGGER.info(
-                "Main fan -> HIGH: Aggressive cooling needed (max deviation: %.1f°C, variance: %.1f°C)",
-                max_deviation,
-                temp_variance,
-            )
+        # Check if we need aggressive HVAC action
+        elif self.hvac_mode == "cool":
+            # In cool mode: high fan only if temps are ABOVE target
+            if avg_temp_diff >= 3.0 or (max_temp_diff >= 3.0 and temp_variance >= 2.0):
+                fan_speed = "high"
+                _LOGGER.info(
+                    "Main fan -> HIGH: Aggressive cooling needed (avg: +%.1f°C, max: +%.1f°C)",
+                    avg_temp_diff,
+                    max_temp_diff,
+                )
+            elif avg_temp_diff <= -1.0:
+                # Temps below target in cool mode - reduce cooling
+                fan_speed = "low"
+                _LOGGER.info(
+                    "Main fan -> LOW: Temps below target in cool mode (avg: %.1f°C)",
+                    avg_temp_diff,
+                )
+            else:
+                fan_speed = "medium"
+                _LOGGER.info(
+                    "Main fan -> MEDIUM: Moderate cooling (avg: %.1f°C, variance: %.1f°C)",
+                    avg_temp_diff,
+                    temp_variance,
+                )
+        elif self.hvac_mode == "heat":
+            # In heat mode: high fan only if temps are BELOW target
+            if avg_temp_diff <= -3.0 or (min_temp_diff <= -3.0 and temp_variance >= 2.0):
+                fan_speed = "high"
+                _LOGGER.info(
+                    "Main fan -> HIGH: Aggressive heating needed (avg: %.1f°C, min: %.1f°C)",
+                    avg_temp_diff,
+                    min_temp_diff,
+                )
+            elif avg_temp_diff >= 1.0:
+                # Temps above target in heat mode - reduce heating
+                fan_speed = "low"
+                _LOGGER.info(
+                    "Main fan -> LOW: Temps above target in heat mode (avg: +%.1f°C)",
+                    avg_temp_diff,
+                )
+            else:
+                fan_speed = "medium"
+                _LOGGER.info(
+                    "Main fan -> MEDIUM: Moderate heating (avg: %.1f°C, variance: %.1f°C)",
+                    avg_temp_diff,
+                    temp_variance,
+                )
         else:
-            # Medium: Moderate cooling/equalizing
-            fan_speed = "medium"
-            _LOGGER.info(
-                "Main fan -> MEDIUM: Moderate cooling (avg deviation: %.1f°C, variance: %.1f°C)",
-                avg_deviation,
-                temp_variance,
-            )
+            # Auto mode or unknown - use deviation magnitude
+            if max_deviation >= 3.0 or temp_variance >= 3.0:
+                fan_speed = "high"
+                _LOGGER.info(
+                    "Main fan -> HIGH: Large deviation (max: %.1f°C, variance: %.1f°C)",
+                    max_deviation,
+                    temp_variance,
+                )
+            else:
+                fan_speed = "medium"
+                _LOGGER.info(
+                    "Main fan -> MEDIUM: Moderate adjustment (avg deviation: %.1f°C)",
+                    avg_deviation,
+                )
 
         # Check if entity exists and is available
         fan_state = self.hass.states.get(self.main_fan_entity)

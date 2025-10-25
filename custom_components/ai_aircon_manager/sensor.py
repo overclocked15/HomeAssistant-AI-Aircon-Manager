@@ -455,20 +455,49 @@ class MainFanSpeedRecommendationSensor(AirconManagerSensorBase):
         if not target_temp:
             return "no_target_temp"
 
+        # Get HVAC mode from climate state
+        main_climate_state = self.coordinator.data.get("main_climate_state", {})
+        hvac_mode = main_climate_state.get("hvac_mode", "cool") if main_climate_state else "cool"
+
         # Calculate fan speed using same logic as optimizer
         avg_temp = sum(temps) / len(temps)
         max_temp = max(temps)
         min_temp = min(temps)
         temp_variance = max_temp - min_temp
-        avg_deviation = abs(avg_temp - target_temp)
-        max_deviation = max(abs(temp - target_temp) for temp in temps)
+        avg_temp_diff = avg_temp - target_temp  # Positive = too hot, Negative = too cold
+        avg_deviation = abs(avg_temp_diff)
+        max_temp_diff = max(temp - target_temp for temp in temps)
+        min_temp_diff = min(temp - target_temp for temp in temps)
 
+        # Check if at target (maintaining)
         if temp_variance <= 1.0 and avg_deviation <= 0.5:
             return "low"
-        elif max_deviation >= 3.0 or temp_variance >= 3.0:
-            return "high"
+        # Mode-aware fan speed logic
+        elif hvac_mode == "cool":
+            # In cool mode: high fan only if temps are ABOVE target
+            if avg_temp_diff >= 3.0 or (max_temp_diff >= 3.0 and temp_variance >= 2.0):
+                return "high"
+            elif avg_temp_diff <= -1.0:
+                # Temps below target in cool mode - reduce cooling
+                return "low"
+            else:
+                return "medium"
+        elif hvac_mode == "heat":
+            # In heat mode: high fan only if temps are BELOW target
+            if avg_temp_diff <= -3.0 or (min_temp_diff <= -3.0 and temp_variance >= 2.0):
+                return "high"
+            elif avg_temp_diff >= 1.0:
+                # Temps above target in heat mode - reduce heating
+                return "low"
+            else:
+                return "medium"
         else:
-            return "medium"
+            # Auto mode or unknown - use deviation magnitude
+            max_deviation = max(abs(max_temp_diff), abs(min_temp_diff))
+            if max_deviation >= 3.0 or temp_variance >= 3.0:
+                return "high"
+            else:
+                return "medium"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
