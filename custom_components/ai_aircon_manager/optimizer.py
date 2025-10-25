@@ -93,6 +93,34 @@ class AirconOptimizer:
         if self.auto_control_main_ac and self.main_climate_entity:
             await self._control_main_ac(needs_ac, main_climate_state)
 
+        # Check if we have valid temperature data
+        valid_temps = [
+            state["current_temperature"]
+            for state in room_states.values()
+            if state["current_temperature"] is not None
+        ]
+
+        if not valid_temps:
+            _LOGGER.warning(
+                "No valid temperature readings available - skipping optimization. "
+                "Check that temperature sensors are working."
+            )
+            await self._send_notification(
+                "No Temperature Data",
+                "No valid temperature readings from sensors. Check sensor availability."
+            )
+            return {
+                "room_states": room_states,
+                "recommendations": {},
+                "ai_response_text": None,
+                "main_climate_state": main_climate_state,
+                "main_fan_speed": None,
+                "main_ac_running": main_ac_running,
+                "needs_ac": False,
+                "last_error": "No valid temperature data",
+                "error_count": self._error_count,
+            }
+
         # Only optimize if AC is running (or we don't have a main climate entity to check)
         recommendations = {}
         main_fan_speed = None
@@ -133,15 +161,35 @@ class AirconOptimizer:
 
             # Get temperature
             temp_state = self.hass.states.get(temp_sensor)
-            current_temp = float(temp_state.state) if temp_state else None
+            current_temp = None
+            if temp_state and temp_state.state not in ["unknown", "unavailable", "none", None]:
+                try:
+                    current_temp = float(temp_state.state)
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning(
+                        "Could not convert temperature for %s (%s): %s = %s",
+                        room_name,
+                        temp_sensor,
+                        temp_state.state,
+                        e,
+                    )
 
             # Get cover position
             cover_state = self.hass.states.get(cover_entity)
-            cover_position = (
-                int(cover_state.attributes.get("current_position", 100))
-                if cover_state
-                else 100
-            )
+            cover_position = 100  # Default to fully open
+            if cover_state:
+                try:
+                    if "current_position" in cover_state.attributes:
+                        pos = cover_state.attributes.get("current_position")
+                        if pos not in ["unknown", "unavailable", "none", None]:
+                            cover_position = int(pos)
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning(
+                        "Could not convert cover position for %s (%s): %s",
+                        room_name,
+                        cover_entity,
+                        e,
+                    )
 
             room_states[room_name] = {
                 "current_temperature": current_temp,
