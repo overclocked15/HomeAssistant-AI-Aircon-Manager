@@ -408,17 +408,26 @@ class MainFanSpeedRecommendationSensor(AirconManagerSensorBase):
 
         # Otherwise calculate it ourselves for debug purposes
         room_states = self.coordinator.data.get("room_states", {})
+
+        if not room_states:
+            return "no_room_data"
+
+        # Use .get() to safely access current_temperature
         temps = [
-            state["current_temperature"]
+            state.get("current_temperature")
             for state in room_states.values()
-            if state["current_temperature"] is not None
+            if state.get("current_temperature") is not None
         ]
 
         if not temps:
             return "no_valid_temps"
 
         # Get target temp from first room (they all share same target)
-        target_temp = next(iter(room_states.values()))["target_temperature"] if room_states else None
+        first_room = next(iter(room_states.values()), None)
+        if not first_room:
+            return "no_rooms"
+
+        target_temp = first_room.get("target_temperature")
         if not target_temp:
             return "no_target_temp"
 
@@ -441,24 +450,36 @@ class MainFanSpeedRecommendationSensor(AirconManagerSensorBase):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return detailed debug attributes."""
         if not self.coordinator.data:
-            return {}
+            return {"status": "no_coordinator_data"}
 
         room_states = self.coordinator.data.get("room_states", {})
+
+        if not room_states:
+            return {"status": "no_room_states", "coordinator_data_keys": list(self.coordinator.data.keys())}
+
+        # Use .get() to safely access current_temperature
         temps = [
-            state["current_temperature"]
+            state.get("current_temperature")
             for state in room_states.values()
-            if state["current_temperature"] is not None
+            if state.get("current_temperature") is not None
         ]
 
         if not temps:
-            return {"status": "no_valid_temperatures"}
+            # Provide debug info about why no temps
+            all_temps = {room: state.get("current_temperature") for room, state in room_states.items()}
+            return {
+                "status": "no_valid_temperatures",
+                "room_count": len(room_states),
+                "room_temperatures": all_temps,
+            }
 
         avg_temp = sum(temps) / len(temps)
         max_temp = max(temps)
         min_temp = min(temps)
         temp_variance = max_temp - min_temp
 
-        target_temp = next(iter(room_states.values()))["target_temperature"] if room_states else None
+        first_room = next(iter(room_states.values()), None)
+        target_temp = first_room.get("target_temperature") if first_room else None
         avg_deviation = abs(avg_temp - target_temp) if target_temp else None
         max_deviation = max(abs(temp - target_temp) for temp in temps) if target_temp else None
 
@@ -649,9 +670,16 @@ class ValidSensorsCountSensor(AirconManagerSensorBase):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return sensor details."""
         if not self.coordinator.data:
-            return {}
+            return {"status": "no_coordinator_data"}
 
         room_states = self.coordinator.data.get("room_states", {})
+
+        if not room_states:
+            return {
+                "status": "no_room_states",
+                "coordinator_data_keys": list(self.coordinator.data.keys()) if self.coordinator.data else [],
+            }
+
         total_rooms = len(room_states)
 
         invalid_sensors = [
@@ -659,10 +687,17 @@ class ValidSensorsCountSensor(AirconManagerSensorBase):
             if state.get("current_temperature") is None
         ]
 
+        # Debug info: show what each sensor's temp is
+        sensor_temps = {
+            room_name: state.get("current_temperature")
+            for room_name, state in room_states.items()
+        }
+
         return {
             "total_rooms": total_rooms,
             "valid_sensors": self.native_value,
             "invalid_sensors": invalid_sensors,
             "all_sensors_valid": len(invalid_sensors) == 0,
             "percentage_valid": round((self.native_value / total_rooms * 100), 1) if total_rooms > 0 else 0,
+            "sensor_temperatures": sensor_temps,
         }
