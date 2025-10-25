@@ -371,48 +371,92 @@ class AirconOptimizer:
         self, room_states: dict[str, dict[str, Any]]
     ) -> str:
         """Build the prompt for the AI."""
-        system_type = "heating" if self.hvac_mode == "heat" else "cooling"
-        action_hot = "reduce heating" if self.hvac_mode == "heat" else "cool them down"
-        action_cold = "heat them up" if self.hvac_mode == "heat" else "reduce cooling"
+        if self.hvac_mode == "heat":
+            system_type = "HEATING"
+            prompt_mode_explanation = """
+HEATING MODE - The system is providing WARM air:
+- Higher zone fan speed = MORE warm air = room heats up FASTER
+- Lower zone fan speed = LESS warm air = room heats up SLOWER (or stays cool)
+
+CRITICAL:
+- Rooms BELOW target temperature: Need HIGH fan speed (want more warm air)
+- Rooms ABOVE target temperature: Need LOW fan speed (don't want warm air, let them cool naturally)
+"""
+        else:  # cooling or auto
+            system_type = "COOLING"
+            prompt_mode_explanation = """
+COOLING MODE - The system is providing COOL air:
+- Higher zone fan speed = MORE cool air = room cools down FASTER
+- Lower zone fan speed = LESS cool air = room cools down SLOWER (or stays warm)
+
+CRITICAL:
+- Rooms ABOVE target temperature: Need HIGH fan speed (want more cool air)
+- Rooms BELOW target temperature: Need LOW fan speed (don't want cool air, let them warm naturally)
+"""
 
         prompt = f"""You are an intelligent HVAC management system. I have a central HVAC system in {system_type} mode with individual zone fan speed controls for each room.
 
 Target temperature for all rooms: {self.target_temperature}°C
 Temperature deadband: {self.temperature_deadband}°C (rooms within this range are considered at target)
 
+{prompt_mode_explanation}
+
 Current room states:
 """
         for room_name, state in room_states.items():
+            temp_diff = state['current_temperature'] - self.target_temperature if state['current_temperature'] is not None else 0
+            temp_status = "AT TARGET" if abs(temp_diff) <= self.temperature_deadband else ("TOO HOT" if temp_diff > 0 else "TOO COLD")
+
             prompt += f"""
 Room: {room_name}
-  - Current temperature: {state['current_temperature']}°C
+  - Current temperature: {state['current_temperature']}°C (Target: {self.target_temperature}°C, Difference: {temp_diff:+.1f}°C, Status: {temp_status})
   - Current zone fan speed: {state['cover_position']}% (0% = off, 100% = full speed)
 """
 
+        if self.hvac_mode == "heat":
+            strategy = """
+Management strategy for HEATING MODE:
+
+1. ROOMS BELOW TARGET (too cold - need heating):
+   - High deviation (3°C+ below): Set fan to 75-100% (aggressive heating)
+   - Medium deviation (1-3°C below): Set fan to 50-75% (moderate heating)
+   - Small deviation (<1°C below): Set fan to 40-60% (gentle heating)
+
+2. ROOMS ABOVE TARGET (too warm - don't need heating):
+   - High deviation (3°C+ above): Set fan to 0-25% (minimal heating, let cool naturally)
+   - Medium deviation (1-3°C above): Set fan to 25-40% (reduce heating)
+   - Small deviation (<1°C above): Set fan to 40-50% (minimal heating)
+
+3. ROOMS AT TARGET (within deadband):
+   - Set fan to 50-70% (maintain equilibrium)
+"""
+        else:  # cooling
+            strategy = """
+Management strategy for COOLING MODE:
+
+1. ROOMS ABOVE TARGET (too hot - need cooling):
+   - High deviation (3°C+ above): Set fan to 75-100% (aggressive cooling)
+   - Medium deviation (1-3°C above): Set fan to 50-75% (moderate cooling)
+   - Small deviation (<1°C above): Set fan to 40-60% (gentle cooling)
+
+2. ROOMS BELOW TARGET (too cold - don't need cooling):
+   - High deviation (3°C+ below): Set fan to 0-25% (minimal cooling, let warm naturally)
+   - Medium deviation (1-3°C below): Set fan to 25-40% (reduce cooling)
+   - Small deviation (<1°C below): Set fan to 40-50% (minimal cooling)
+
+3. ROOMS AT TARGET (within deadband):
+   - Set fan to 50-70% (maintain equilibrium)
+"""
+
         prompt += f"""
-Your goal is to manage the HVAC system so that ALL rooms reach and maintain the target temperature.
-
-How the system works:
-- Each room has an adjustable zone fan speed (0-100%)
-- Higher fan speed = more airflow = faster {system_type} for that room
-- Lower fan speed = less airflow = slower {system_type} for that room
-
-Management strategy for {system_type.upper()} MODE:
-1. EQUALIZING PHASE (when rooms have different temperatures):
-   - Rooms that need MORE {system_type}: Set zone fan to HIGH (75-100%) to {action_hot} faster
-   - Rooms that need LESS {system_type}: Set zone fan to LOW (25-50%) to {action_cold}
-   - This redistributes the {system_type} effect to equalize temperatures across the house
-
-2. MAINTENANCE PHASE (when all rooms are within deadband of target):
-   - Set all zones to BALANCED levels (around 70-80%) to maintain temperature
-   - Make small adjustments (±5-10%) based on minor temperature variations
+{strategy}
 
 Key principles:
+- DIRECTION MATTERS: Consider whether room is above or below target, not just the magnitude
 - Make gradual adjustments (10-25% changes typically)
-- Larger temperature differences warrant larger fan speed adjustments
-- Never set all zones below 25% as this wastes energy
+- Balance the system: redistribute airflow to equalize temperatures
 - Goal is whole-home temperature equilibrium at target
-- Consider the deadband: rooms within ±{self.temperature_deadband}°C are acceptable
+- Deadband: rooms within ±{self.temperature_deadband}°C are acceptable
 
 Respond ONLY with a JSON object in this exact format (no other text):
 {{
