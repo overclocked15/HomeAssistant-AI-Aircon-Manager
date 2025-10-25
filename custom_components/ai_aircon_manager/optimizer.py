@@ -157,14 +157,16 @@ class AirconOptimizer:
         )
 
         # Only optimize if AC is running (or we don't have a main climate entity to check)
-        recommendations = self._last_recommendations  # Start with last known values
+        # Start with last known values, or empty dict/None if first run
+        recommendations = self._last_recommendations if self._last_recommendations else {}
         main_fan_speed = self._last_main_fan_speed
 
         if not self.main_climate_entity or main_ac_running:
             if should_run_ai:
                 # Time for AI optimization
-                _LOGGER.debug(
-                    "Running AI optimization (%.0fs since last optimization)",
+                _LOGGER.info(
+                    "Running AI optimization (first run: %s, %.0fs since last)",
+                    self._last_ai_optimization is None,
                     current_time - self._last_ai_optimization if self._last_ai_optimization else 0,
                 )
 
@@ -192,14 +194,20 @@ class AirconOptimizer:
             else:
                 # Just collecting data, not running AI yet - reuse last values
                 time_until_next_ai = self._ai_optimization_interval - (current_time - self._last_ai_optimization)
-                _LOGGER.debug(
-                    "Data collection only (next AI optimization in %.0fs)",
+                _LOGGER.info(
+                    "Data collection only (next AI optimization in %.0fs, using cached: recs=%s, fan=%s)",
                     time_until_next_ai,
+                    bool(self._last_recommendations),
+                    self._last_main_fan_speed,
                 )
         else:
-            _LOGGER.info("Main AC is not running - skipping optimization")
+            _LOGGER.info(
+                "Main AC is not running - skipping optimization (main_climate_entity=%s, running=%s)",
+                self.main_climate_entity,
+                main_ac_running,
+            )
 
-        return {
+        result = {
             "room_states": room_states,
             "recommendations": recommendations,
             "ai_response_text": self._last_ai_response,
@@ -210,6 +218,16 @@ class AirconOptimizer:
             "last_error": self._last_error,
             "error_count": self._error_count,
         }
+
+        _LOGGER.info(
+            "Optimization cycle complete: rooms=%d, recommendations=%d, main_fan=%s, ac_running=%s",
+            len(room_states),
+            len(recommendations),
+            main_fan_speed,
+            main_ac_running,
+        )
+
+        return result
 
     async def _collect_room_states(self) -> dict[str, dict[str, Any]]:
         """Collect current temperature and cover state for all rooms."""
