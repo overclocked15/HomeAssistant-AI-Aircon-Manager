@@ -60,6 +60,16 @@ async def async_setup_entry(
     if optimizer.main_fan_entity:
         entities.append(MainFanSpeedSensor(coordinator, config_entry))
 
+    # Add debug sensors
+    entities.append(SystemStatusDebugSensor(coordinator, config_entry))
+    entities.append(LastOptimizationTimeSensor(coordinator, config_entry))
+    entities.append(ErrorTrackingSensor(coordinator, config_entry))
+    entities.append(ValidSensorsCountSensor(coordinator, config_entry))
+
+    # Add main fan speed recommendation debug sensor if configured
+    if optimizer.main_fan_entity:
+        entities.append(MainFanSpeedRecommendationSensor(coordinator, config_entry))
+
     async_add_entities(entities)
 
 
@@ -357,4 +367,234 @@ class MainFanSpeedSensor(CoordinatorEntity, SensorEntity):
                 "High: max deviation ≥3°C or variance ≥3°C (aggressive cooling)\n"
                 "Medium: All other cases (moderate cooling/equalizing)"
             ),
+        }
+
+
+class MainFanSpeedRecommendationSensor(CoordinatorEntity, SensorEntity):
+    """Debug sensor showing the AI's recommendation for main fan speed."""
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{config_entry.entry_id}_main_fan_recommendation_debug"
+        self._attr_name = "Main Fan Speed AI Recommendation"
+        self._attr_icon = "mdi:fan-alert"
+
+    @property
+    def native_value(self) -> str:
+        """Return the AI recommended fan speed."""
+        if not self.coordinator.data:
+            return "unknown"
+
+        main_fan_speed = self.coordinator.data.get("main_fan_speed", "unknown")
+        return main_fan_speed if main_fan_speed else "not_calculated"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return detailed debug attributes."""
+        if not self.coordinator.data:
+            return {}
+
+        room_states = self.coordinator.data.get("room_states", {})
+        temps = [
+            state["current_temperature"]
+            for state in room_states.values()
+            if state["current_temperature"] is not None
+        ]
+
+        if not temps:
+            return {"status": "no_valid_temperatures"}
+
+        avg_temp = sum(temps) / len(temps)
+        max_temp = max(temps)
+        min_temp = min(temps)
+        temp_variance = max_temp - min_temp
+
+        target_temp = next(iter(room_states.values()))["target_temperature"] if room_states else None
+        avg_deviation = abs(avg_temp - target_temp) if target_temp else None
+        max_deviation = max(abs(temp - target_temp) for temp in temps) if target_temp else None
+
+        return {
+            "average_temperature": round(avg_temp, 1),
+            "temperature_variance": round(temp_variance, 1),
+            "average_deviation": round(avg_deviation, 1) if avg_deviation else None,
+            "max_deviation": round(max_deviation, 1) if max_deviation else None,
+            "decision_criteria": {
+                "low": "variance ≤1°C AND avg_deviation ≤0.5°C",
+                "high": "max_deviation ≥3°C OR variance ≥3°C",
+                "medium": "all other cases",
+            },
+            "current_values_meet": self._evaluate_criteria(temp_variance, avg_deviation, max_deviation),
+        }
+
+    def _evaluate_criteria(self, variance, avg_dev, max_dev):
+        """Evaluate which criteria are met."""
+        if avg_dev is None or max_dev is None:
+            return "no_data"
+
+        criteria = []
+        if variance <= 1.0 and avg_dev <= 0.5:
+            criteria.append("low_criteria")
+        if max_dev >= 3.0 or variance >= 3.0:
+            criteria.append("high_criteria")
+        if not criteria:
+            criteria.append("medium_criteria")
+
+        return ", ".join(criteria)
+
+
+class SystemStatusDebugSensor(CoordinatorEntity, SensorEntity):
+    """Debug sensor showing overall system status."""
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{config_entry.entry_id}_system_status_debug"
+        self._attr_name = "System Status Debug"
+        self._attr_icon = "mdi:bug"
+
+    @property
+    def native_value(self) -> str:
+        """Return the system status."""
+        if not self.coordinator.data:
+            return "no_data"
+
+        main_ac_running = self.coordinator.data.get("main_ac_running", False)
+        needs_ac = self.coordinator.data.get("needs_ac", False)
+        error = self.coordinator.data.get("last_error")
+
+        if error:
+            return "error"
+        elif not main_ac_running and needs_ac:
+            return "ac_needed_but_off"
+        elif main_ac_running and not needs_ac:
+            return "ac_running_but_not_needed"
+        elif main_ac_running:
+            return "optimizing"
+        else:
+            return "idle"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return detailed debug attributes."""
+        if not self.coordinator.data:
+            return {}
+
+        return {
+            "main_ac_running": self.coordinator.data.get("main_ac_running", "unknown"),
+            "needs_ac": self.coordinator.data.get("needs_ac", "unknown"),
+            "last_error": self.coordinator.data.get("last_error"),
+            "error_count": self.coordinator.data.get("error_count", 0),
+            "has_recommendations": bool(self.coordinator.data.get("recommendations")),
+            "recommendation_count": len(self.coordinator.data.get("recommendations", {})),
+            "ai_response_available": bool(self.coordinator.data.get("ai_response_text")),
+            "main_climate_state": self.coordinator.data.get("main_climate_state"),
+        }
+
+
+class LastOptimizationTimeSensor(CoordinatorEntity, SensorEntity):
+    """Sensor showing when last optimization ran."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{config_entry.entry_id}_last_optimization_time"
+        self._attr_name = "Last Optimization Time"
+        self._attr_icon = "mdi:clock-check"
+
+    @property
+    def native_value(self):
+        """Return the last successful update time."""
+        return self.coordinator.last_update_success_time
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        return {
+            "last_update_success": self.coordinator.last_update_success,
+            "update_interval_minutes": self.coordinator.update_interval.total_seconds() / 60 if self.coordinator.update_interval else None,
+            "next_update_in_seconds": (
+                (self.coordinator.last_update_success_time + self.coordinator.update_interval -
+                 self.coordinator.hass.loop.time()).total_seconds()
+                if self.coordinator.last_update_success_time and self.coordinator.update_interval
+                else None
+            ),
+        }
+
+
+class ErrorTrackingSensor(CoordinatorEntity, SensorEntity):
+    """Sensor tracking errors and warnings."""
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{config_entry.entry_id}_error_tracking"
+        self._attr_name = "Error Tracking"
+        self._attr_icon = "mdi:alert-circle"
+
+    @property
+    def native_value(self) -> int:
+        """Return the error count."""
+        if not self.coordinator.data:
+            return 0
+        return self.coordinator.data.get("error_count", 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return error details."""
+        if not self.coordinator.data:
+            return {}
+
+        return {
+            "last_error": self.coordinator.data.get("last_error"),
+            "last_error_time": self.coordinator.last_update_success_time if self.coordinator.data.get("last_error") else None,
+            "status": "errors_present" if self.coordinator.data.get("error_count", 0) > 0 else "no_errors",
+        }
+
+
+class ValidSensorsCountSensor(CoordinatorEntity, SensorEntity):
+    """Sensor showing count of valid temperature sensors."""
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{config_entry.entry_id}_valid_sensors_count"
+        self._attr_name = "Valid Sensors Count"
+        self._attr_icon = "mdi:thermometer-check"
+
+    @property
+    def native_value(self) -> int:
+        """Return count of valid sensors."""
+        if not self.coordinator.data:
+            return 0
+
+        room_states = self.coordinator.data.get("room_states", {})
+        valid_count = sum(
+            1 for state in room_states.values()
+            if state.get("current_temperature") is not None
+        )
+        return valid_count
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return sensor details."""
+        if not self.coordinator.data:
+            return {}
+
+        room_states = self.coordinator.data.get("room_states", {})
+        total_rooms = len(room_states)
+
+        invalid_sensors = [
+            room_name for room_name, state in room_states.items()
+            if state.get("current_temperature") is None
+        ]
+
+        return {
+            "total_rooms": total_rooms,
+            "valid_sensors": self.native_value,
+            "invalid_sensors": invalid_sensors,
+            "all_sensors_valid": len(invalid_sensors) == 0,
+            "percentage_valid": round((self.native_value / total_rooms * 100), 1) if total_rooms > 0 else 0,
         }
