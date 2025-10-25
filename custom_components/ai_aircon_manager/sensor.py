@@ -95,6 +95,7 @@ async def async_setup_entry(
     # Add debug sensors
     entities.append(SystemStatusDebugSensor(coordinator, config_entry))
     entities.append(LastOptimizationTimeSensor(coordinator, config_entry))
+    entities.append(NextOptimizationTimeSensor(coordinator, config_entry))
     entities.append(ErrorTrackingSensor(coordinator, config_entry))
     entities.append(ValidSensorsCountSensor(coordinator, config_entry))
 
@@ -670,6 +671,85 @@ class LastOptimizationTimeSensor(AirconManagerSensorBase):
                 attrs["next_update_in_seconds"] = None
         else:
             attrs["next_update_in_seconds"] = None
+
+        return attrs
+
+
+class NextOptimizationTimeSensor(AirconManagerSensorBase):
+    """Sensor showing when next AI optimization will run."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_next_optimization_time"
+        self._attr_name = "Next AI Optimization Time"
+        self._attr_icon = "mdi:clock-outline"
+
+    @property
+    def native_value(self):
+        """Return the next AI optimization time."""
+        from datetime import datetime, timezone, timedelta
+
+        if not self.coordinator.data:
+            return None
+
+        # Get optimizer from hass data
+        from .const import DOMAIN
+        entry_data = self.coordinator.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id, {})
+        optimizer = entry_data.get("optimizer")
+
+        if not optimizer:
+            return None
+
+        # Calculate next optimization time
+        if hasattr(optimizer, '_last_ai_optimization') and optimizer._last_ai_optimization:
+            last_opt_timestamp = optimizer._last_ai_optimization
+            interval_seconds = optimizer._ai_optimization_interval
+            next_opt_timestamp = last_opt_timestamp + interval_seconds
+
+            # Convert to datetime
+            next_opt_dt = datetime.fromtimestamp(next_opt_timestamp, tz=timezone.utc)
+            return next_opt_dt
+
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        from datetime import datetime, timezone
+        import time
+
+        if not self.coordinator.data:
+            return {}
+
+        # Get optimizer from hass data
+        from .const import DOMAIN
+        entry_data = self.coordinator.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id, {})
+        optimizer = entry_data.get("optimizer")
+
+        if not optimizer:
+            return {"status": "optimizer_not_found"}
+
+        attrs = {
+            "ai_optimization_interval_seconds": optimizer._ai_optimization_interval if hasattr(optimizer, '_ai_optimization_interval') else None,
+            "ai_optimization_interval_minutes": (optimizer._ai_optimization_interval / 60) if hasattr(optimizer, '_ai_optimization_interval') else None,
+        }
+
+        # Calculate time until next optimization
+        if hasattr(optimizer, '_last_ai_optimization') and optimizer._last_ai_optimization:
+            current_time = time.time()
+            time_since_last = current_time - optimizer._last_ai_optimization
+            time_until_next = optimizer._ai_optimization_interval - time_since_last
+
+            attrs["seconds_until_next"] = max(0, time_until_next)
+            attrs["minutes_until_next"] = max(0, time_until_next / 60)
+            attrs["seconds_since_last"] = time_since_last
+            attrs["will_run_next_cycle"] = time_until_next <= 0
+        else:
+            attrs["seconds_until_next"] = 0
+            attrs["will_run_next_cycle"] = True  # First run
 
         return attrs
 

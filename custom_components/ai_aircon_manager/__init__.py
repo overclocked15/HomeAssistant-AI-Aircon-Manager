@@ -76,6 +76,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Pass the AI optimization interval to the optimizer
     optimizer._ai_optimization_interval = update_interval * 60  # Convert minutes to seconds
+    _LOGGER.info(
+        "AI optimization interval set to %d minutes (%d seconds)",
+        update_interval,
+        optimizer._ai_optimization_interval
+    )
 
     # Create coordinator for frequent data polling (independent of AI optimization)
     coordinator = DataUpdateCoordinator(

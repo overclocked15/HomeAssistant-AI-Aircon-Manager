@@ -162,6 +162,16 @@ class AirconOptimizer:
             (current_time - self._last_ai_optimization) >= self._ai_optimization_interval
         )
 
+        # Debug logging for interval checking
+        if self._last_ai_optimization is not None:
+            time_since_last = current_time - self._last_ai_optimization
+            _LOGGER.debug(
+                "AI optimization check: interval=%.0fs, time_since_last=%.0fs, should_run=%s",
+                self._ai_optimization_interval,
+                time_since_last,
+                should_run_ai
+            )
+
         # Only optimize if AC is running (or we don't have a main climate entity to check)
         # Start with last known values, or empty dict/None if first run
         recommendations = self._last_recommendations if self._last_recommendations else {}
@@ -171,9 +181,11 @@ class AirconOptimizer:
             if should_run_ai:
                 # Time for AI optimization
                 _LOGGER.info(
-                    "Running AI optimization (first run: %s, %.0fs since last)",
+                    "Running AI optimization (first run: %s, %.0fs since last, interval: %.0fs/%.1fmin)",
                     self._last_ai_optimization is None,
                     current_time - self._last_ai_optimization if self._last_ai_optimization else 0,
+                    self._ai_optimization_interval,
+                    self._ai_optimization_interval / 60
                 )
 
                 # Get AI recommendations
@@ -200,9 +212,11 @@ class AirconOptimizer:
             else:
                 # Just collecting data, not running AI yet - reuse last values
                 time_until_next_ai = self._ai_optimization_interval - (current_time - self._last_ai_optimization)
-                _LOGGER.info(
-                    "Data collection only (next AI optimization in %.0fs, using cached: recs=%s, fan=%s)",
+                _LOGGER.debug(
+                    "Data collection only (next AI optimization in %.0fs/%.1fmin, interval: %.0fs, using cached: recs=%s, fan=%s)",
                     time_until_next_ai,
+                    time_until_next_ai / 60,
+                    self._ai_optimization_interval,
                     bool(self._last_recommendations),
                     self._last_main_fan_speed,
                 )
