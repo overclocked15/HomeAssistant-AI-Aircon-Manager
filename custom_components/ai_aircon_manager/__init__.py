@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_DATA_POLL_INTERVAL,
     DEFAULT_TEMPERATURE_DEADBAND,
     DEFAULT_HVAC_MODE,
     DEFAULT_AUTO_CONTROL_MAIN_AC,
@@ -34,7 +35,7 @@ def get_device_info(config_entry: ConfigEntry) -> dict:
         "name": "AI Aircon Manager",
         "manufacturer": "AI Aircon Manager",
         "model": "AI-Powered HVAC Controller",
-        "sw_version": "1.3.0",
+        "sw_version": "1.3.8",
     }
 
 
@@ -64,16 +65,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ai_model=entry.data.get(CONF_AI_MODEL, default_model),
     )
 
-    # Get update interval from config
+    # Get update interval from config (for AI optimization)
     update_interval = entry.data.get("update_interval", DEFAULT_UPDATE_INTERVAL)
 
-    # Create coordinator for periodic updates
+    # Pass the AI optimization interval to the optimizer
+    optimizer._ai_optimization_interval = update_interval * 60  # Convert minutes to seconds
+
+    # Create coordinator for frequent data polling (independent of AI optimization)
     coordinator = DataUpdateCoordinator(
         hass,
         _LOGGER,
         name=DOMAIN,
         update_method=optimizer.async_optimize,
-        update_interval=timedelta(minutes=update_interval),
+        update_interval=timedelta(seconds=DEFAULT_DATA_POLL_INTERVAL),
     )
 
     # Store the optimizer and coordinator

@@ -50,8 +50,12 @@ class AirconOptimizer:
         self._last_error = None
         self._error_count = 0
         self._startup_time = None
-        from .const import DEFAULT_STARTUP_DELAY
+        from .const import DEFAULT_STARTUP_DELAY, DEFAULT_UPDATE_INTERVAL
         self._startup_delay_seconds = DEFAULT_STARTUP_DELAY
+        self._last_ai_optimization = None
+        self._ai_optimization_interval = DEFAULT_UPDATE_INTERVAL * 60  # Convert minutes to seconds
+        self._last_recommendations = {}
+        self._last_main_fan_speed = None
 
     async def async_setup(self) -> None:
         """Set up the AI client."""
@@ -144,25 +148,54 @@ class AirconOptimizer:
                 "error_count": self._error_count if not in_startup_delay else 0,
             }
 
+        # Check if it's time for AI optimization
+        import time
+        current_time = time.time()
+        should_run_ai = (
+            self._last_ai_optimization is None or
+            (current_time - self._last_ai_optimization) >= self._ai_optimization_interval
+        )
+
         # Only optimize if AC is running (or we don't have a main climate entity to check)
-        recommendations = {}
-        main_fan_speed = None
+        recommendations = self._last_recommendations  # Start with last known values
+        main_fan_speed = self._last_main_fan_speed
 
         if not self.main_climate_entity or main_ac_running:
-            # Get AI recommendations
-            recommendations = await self._get_ai_recommendations(room_states)
+            if should_run_ai:
+                # Time for AI optimization
+                _LOGGER.debug(
+                    "Running AI optimization (%.0fs since last optimization)",
+                    current_time - self._last_ai_optimization if self._last_ai_optimization else 0,
+                )
 
-            # Apply recommendations (respecting room overrides)
-            await self._apply_recommendations(recommendations)
+                # Get AI recommendations
+                recommendations = await self._get_ai_recommendations(room_states)
 
-            # Determine and set main fan speed based on system state
-            if self.main_fan_entity:
-                main_fan_speed = await self._determine_and_set_main_fan_speed(room_states)
+                # Apply recommendations (respecting room overrides)
+                await self._apply_recommendations(recommendations)
 
-            # Reset error tracking on successful optimization
-            if recommendations:
-                self._last_error = None
-                self._error_count = 0
+                # Determine and set main fan speed based on system state
+                if self.main_fan_entity:
+                    main_fan_speed = await self._determine_and_set_main_fan_speed(room_states)
+
+                # Reset error tracking on successful optimization
+                if recommendations:
+                    self._last_error = None
+                    self._error_count = 0
+
+                # Store values for future data-only polls
+                self._last_recommendations = recommendations
+                self._last_main_fan_speed = main_fan_speed
+
+                # Update last AI optimization time
+                self._last_ai_optimization = current_time
+            else:
+                # Just collecting data, not running AI yet - reuse last values
+                time_until_next_ai = self._ai_optimization_interval - (current_time - self._last_ai_optimization)
+                _LOGGER.debug(
+                    "Data collection only (next AI optimization in %.0fs)",
+                    time_until_next_ai,
+                )
         else:
             _LOGGER.info("Main AC is not running - skipping optimization")
 
@@ -190,16 +223,32 @@ class AirconOptimizer:
             # Get temperature
             temp_state = self.hass.states.get(temp_sensor)
             current_temp = None
+
+            _LOGGER.info(
+                "Room %s: temp_sensor=%s, temp_state=%s, state_value=%s",
+                room_name,
+                temp_sensor,
+                "found" if temp_state else "NOT FOUND",
+                temp_state.state if temp_state else "N/A",
+            )
+
             if temp_state and temp_state.state not in ["unknown", "unavailable", "none", None]:
                 try:
                     current_temp = float(temp_state.state)
 
                     # Check and convert temperature unit if needed
                     unit = temp_state.attributes.get("unit_of_measurement", "°C")
+                    _LOGGER.info(
+                        "Room %s: Successfully read temp=%.1f, unit=%s",
+                        room_name,
+                        current_temp,
+                        unit,
+                    )
+
                     if unit in ["°F", "fahrenheit", "F"]:
                         # Convert Fahrenheit to Celsius
                         current_temp = (current_temp - 32) * 5.0 / 9.0
-                        _LOGGER.debug(
+                        _LOGGER.info(
                             "Converted temperature for %s from Fahrenheit to Celsius: %.1f°C",
                             room_name,
                             current_temp,
@@ -218,6 +267,20 @@ class AirconOptimizer:
                         temp_sensor,
                         temp_state.state,
                         e,
+                    )
+            else:
+                if not temp_state:
+                    _LOGGER.warning(
+                        "Room %s: Temperature sensor %s not found in Home Assistant!",
+                        room_name,
+                        temp_sensor,
+                    )
+                else:
+                    _LOGGER.warning(
+                        "Room %s: Temperature sensor %s has invalid state: %s",
+                        room_name,
+                        temp_sensor,
+                        temp_state.state,
                     )
 
             # Get cover position
