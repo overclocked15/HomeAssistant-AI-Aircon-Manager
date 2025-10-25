@@ -154,6 +154,9 @@ class AirconOptimizer:
                 "error_count": self._error_count if not in_startup_delay else 0,
             }
 
+        # Check if all rooms are stable (within deadband) - cost optimization
+        all_rooms_stable = self._check_rooms_stable(room_states)
+
         # Check if it's time for AI optimization
         import time
         current_time = time.time()
@@ -162,14 +165,23 @@ class AirconOptimizer:
             (current_time - self._last_ai_optimization) >= self._ai_optimization_interval
         )
 
+        # Skip AI if all rooms are stable (cost optimization)
+        if all_rooms_stable and self._last_recommendations:
+            should_run_ai = False
+            _LOGGER.info(
+                "Skipping AI optimization - all rooms stable within deadband (±%.1f°C), reusing last recommendations (cost optimization)",
+                self.temperature_deadband
+            )
+
         # Debug logging for interval checking
         if self._last_ai_optimization is not None:
             time_since_last = current_time - self._last_ai_optimization
             _LOGGER.debug(
-                "AI optimization check: interval=%.0fs, time_since_last=%.0fs, should_run=%s",
+                "AI optimization check: interval=%.0fs, time_since_last=%.0fs, should_run=%s, all_rooms_stable=%s",
                 self._ai_optimization_interval,
                 time_since_last,
-                should_run_ai
+                should_run_ai,
+                all_rooms_stable
             )
 
         # Only optimize if AC is running (or we don't have a main climate entity to check)
@@ -222,7 +234,7 @@ class AirconOptimizer:
                 )
         else:
             _LOGGER.info(
-                "Main AC is not running - skipping optimization (main_climate_entity=%s, running=%s)",
+                "Main AC is not running - skipping AI optimization, reusing last recommendations (cost optimization) (main_climate_entity=%s, running=%s)",
                 self.main_climate_entity,
                 main_ac_running,
             )
@@ -800,6 +812,36 @@ Where recommended_fan_speed is an integer between 0 and 100.
             await self._send_notification("Main Fan Error", f"Failed to set main fan speed: {e}")
 
         return fan_speed
+
+    def _check_rooms_stable(self, room_states: dict[str, dict[str, Any]]) -> bool:
+        """Check if all rooms are stable (within deadband of target)."""
+        if not room_states:
+            return False
+
+        for room_name, state in room_states.items():
+            current_temp = state.get("current_temperature")
+            target_temp = state.get("target_temperature")
+
+            if current_temp is None or target_temp is None:
+                # Can't determine stability without valid temps
+                return False
+
+            temp_diff = abs(current_temp - target_temp)
+            if temp_diff > self.temperature_deadband:
+                # Room is outside deadband - not stable
+                _LOGGER.debug(
+                    "Room %s not stable: temp=%.1f°C, target=%.1f°C, diff=%.1f°C (deadband=%.1f°C)",
+                    room_name,
+                    current_temp,
+                    target_temp,
+                    temp_diff,
+                    self.temperature_deadband
+                )
+                return False
+
+        # All rooms are within deadband
+        _LOGGER.debug("All rooms stable within deadband (±%.1f°C)", self.temperature_deadband)
+        return True
 
     async def _check_if_ac_needed(self, room_states: dict[str, dict[str, Any]], ac_currently_on: bool) -> bool:
         """Check if AC is needed based on room temperatures with hysteresis.

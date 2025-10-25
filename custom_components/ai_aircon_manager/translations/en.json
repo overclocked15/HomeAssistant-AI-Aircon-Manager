@@ -52,6 +52,7 @@
           "temperature_deadband": "Temperature Deadband (°C) - acceptable range from target",
           "update_interval": "Update Interval (minutes)",
           "hvac_mode": "HVAC Mode",
+          "ai_model": "AI Model (Haiku/Mini recommended for cost savings)",
           "main_climate_entity": "Main Aircon Climate Entity (Optional - for monitoring/control)",
           "auto_control_main_ac": "Automatically turn main AC on/off based on need",
           "auto_control_ac_temperature": "Automatically control main AC temperature setpoint (fully automatic mode)",

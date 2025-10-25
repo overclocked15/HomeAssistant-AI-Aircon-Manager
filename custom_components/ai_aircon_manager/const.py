@@ -31,6 +31,16 @@ CONF_AI_MODEL = "ai_model"
 DEFAULT_CLAUDE_MODEL = "claude-3-5-sonnet-20241022"
 DEFAULT_CHATGPT_MODEL = "gpt-4-turbo-preview"
 
+# Available AI models
+CLAUDE_MODELS = [
+    "claude-3-5-sonnet-20241022",  # Most capable, higher cost
+    "claude-3-5-haiku-20241022",   # Fast and cost-effective (recommended for cost savings)
+]
+CHATGPT_MODELS = [
+    "gpt-4-turbo-preview",  # Most capable, higher cost
+    "gpt-4o-mini",          # Fast and cost-effective (recommended for cost savings)
+]
+
 # HVAC Modes
 HVAC_MODE_COOL = "cool"
 HVAC_MODE_HEAT = "heat"

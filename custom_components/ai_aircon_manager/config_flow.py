@@ -32,6 +32,11 @@ from .const import (
     CONF_ROOM_OVERRIDES,
     AI_PROVIDER_CLAUDE,
     AI_PROVIDER_CHATGPT,
+    CLAUDE_MODELS,
+    CHATGPT_MODELS,
+    CONF_AI_MODEL,
+    DEFAULT_CLAUDE_MODEL,
+    DEFAULT_CHATGPT_MODEL,
     HVAC_MODE_COOL,
     HVAC_MODE_HEAT,
     HVAC_MODE_AUTO,
@@ -226,6 +231,28 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                                 {"label": "Heating", "value": HVAC_MODE_HEAT},
                                 {"label": "Auto (based on main climate)", "value": HVAC_MODE_AUTO},
                             ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_AI_MODEL,
+                        default=self.config_entry.data.get(
+                            CONF_AI_MODEL,
+                            DEFAULT_CLAUDE_MODEL if self.config_entry.data.get("ai_provider") == AI_PROVIDER_CLAUDE else DEFAULT_CHATGPT_MODEL
+                        ),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=(
+                                [
+                                    {"label": "Claude 3.5 Sonnet (Higher cost, most capable)", "value": "claude-3-5-sonnet-20241022"},
+                                    {"label": "Claude 3.5 Haiku (Lower cost, fast - RECOMMENDED)", "value": "claude-3-5-haiku-20241022"},
+                                ]
+                                if self.config_entry.data.get("ai_provider") == AI_PROVIDER_CLAUDE
+                                else [
+                                    {"label": "GPT-4 Turbo (Higher cost, most capable)", "value": "gpt-4-turbo-preview"},
+                                    {"label": "GPT-4o Mini (Lower cost, fast - RECOMMENDED)", "value": "gpt-4o-mini"},
+                                ]
+                            ),
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
