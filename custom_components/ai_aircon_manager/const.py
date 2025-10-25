@@ -18,6 +18,8 @@ CONF_HVAC_MODE = "hvac_mode"
 CONF_AUTO_CONTROL_MAIN_AC = "auto_control_main_ac"
 CONF_ENABLE_NOTIFICATIONS = "enable_notifications"
 CONF_ROOM_OVERRIDES = "room_overrides"
+CONF_AC_TURN_ON_THRESHOLD = "ac_turn_on_threshold"
+CONF_AC_TURN_OFF_THRESHOLD = "ac_turn_off_threshold"
 
 # AI Providers
 AI_PROVIDER_CLAUDE = "claude"
@@ -42,3 +44,5 @@ DEFAULT_HVAC_MODE = HVAC_MODE_COOL
 DEFAULT_AUTO_CONTROL_MAIN_AC = False
 DEFAULT_ENABLE_NOTIFICATIONS = True
 DEFAULT_STARTUP_DELAY = 120  # seconds (2 minutes) - prevents notifications during boot
+DEFAULT_AC_TURN_ON_THRESHOLD = 1.0  # degrees C above target to turn AC on
+DEFAULT_AC_TURN_OFF_THRESHOLD = 2.0  # degrees C below target to turn AC off

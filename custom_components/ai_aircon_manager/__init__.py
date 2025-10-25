@@ -17,6 +17,8 @@ from .const import (
     DEFAULT_HVAC_MODE,
     DEFAULT_AUTO_CONTROL_MAIN_AC,
     DEFAULT_ENABLE_NOTIFICATIONS,
+    DEFAULT_AC_TURN_ON_THRESHOLD,
+    DEFAULT_AC_TURN_OFF_THRESHOLD,
     CONF_AI_MODEL,
     DEFAULT_CLAUDE_MODEL,
     DEFAULT_CHATGPT_MODEL,
@@ -35,7 +37,7 @@ def get_device_info(config_entry: ConfigEntry) -> dict:
         "name": "AI Aircon Manager",
         "manufacturer": "AI Aircon Manager",
         "model": "AI-Powered HVAC Controller",
-        "sw_version": "1.4.1",
+        "sw_version": "1.5.0",
     }
 
 
@@ -63,6 +65,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         room_overrides=entry.data.get("room_overrides", {}),
         config_entry=entry,
         ai_model=entry.data.get(CONF_AI_MODEL, default_model),
+        ac_turn_on_threshold=entry.data.get("ac_turn_on_threshold", DEFAULT_AC_TURN_ON_THRESHOLD),
+        ac_turn_off_threshold=entry.data.get("ac_turn_off_threshold", DEFAULT_AC_TURN_OFF_THRESHOLD),
     )
 
     # Get update interval from config (for AI optimization)

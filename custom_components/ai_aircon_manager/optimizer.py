@@ -29,6 +29,8 @@ class AirconOptimizer:
         room_overrides: dict[str, Any] | None = None,
         config_entry: Any | None = None,
         ai_model: str | None = None,
+        ac_turn_on_threshold: float = 1.0,
+        ac_turn_off_threshold: float = 2.0,
     ) -> None:
         """Initialize the optimizer."""
         self.hass = hass
@@ -45,6 +47,8 @@ class AirconOptimizer:
         self.enable_notifications = enable_notifications
         self.room_overrides = room_overrides or {}
         self.config_entry = config_entry
+        self.ac_turn_on_threshold = ac_turn_on_threshold
+        self.ac_turn_off_threshold = ac_turn_off_threshold
         self._ai_client = None
         self._last_ai_response = None
         self._last_error = None
@@ -98,8 +102,8 @@ class AirconOptimizer:
                     or (hvac_mode and hvac_mode not in ["off", "unavailable"])
                 )
 
-        # Determine if we need the AC on
-        needs_ac = await self._check_if_ac_needed(room_states)
+        # Determine if we need the AC on (with hysteresis based on current state)
+        needs_ac = await self._check_if_ac_needed(room_states, main_ac_running)
 
         # Auto-control main AC if enabled
         if self.auto_control_main_ac and self.main_climate_entity:
@@ -708,8 +712,15 @@ Where recommended_fan_speed is an integer between 0 and 100.
 
         return fan_speed
 
-    async def _check_if_ac_needed(self, room_states: dict[str, dict[str, Any]]) -> bool:
-        """Check if AC is needed based on room temperatures and deadband."""
+    async def _check_if_ac_needed(self, room_states: dict[str, dict[str, Any]], ac_currently_on: bool) -> bool:
+        """Check if AC is needed based on room temperatures with hysteresis.
+
+        Hysteresis prevents rapid on/off cycling by using different thresholds:
+        - Turn ON threshold: Further from target (e.g., +1°C in cool mode)
+        - Turn OFF threshold: Closer to target (e.g., -2°C in cool mode)
+
+        This creates a "comfort zone" where AC stays in its current state.
+        """
         temps = [
             state["current_temperature"]
             for state in room_states.values()
@@ -720,17 +731,86 @@ Where recommended_fan_speed is an integer between 0 and 100.
             return False
 
         avg_temp = sum(temps) / len(temps)
+        temp_diff = avg_temp - self.target_temperature
 
-        # Use deadband to determine if AC is needed
-        # For cooling: if avg temp > target + deadband, need cooling
-        # For heating: if avg temp < target - deadband, need heating
+        # For cooling mode with hysteresis
         if self.hvac_mode == "cool":
-            return avg_temp > (self.target_temperature + self.temperature_deadband)
+            if ac_currently_on:
+                # AC is ON: Turn OFF if temp drops significantly below target
+                # AND no rooms are above target (all rooms have cooled down)
+                max_temp = max(temps)
+                turn_off = (temp_diff <= -self.ac_turn_off_threshold and
+                           max_temp <= self.target_temperature)
+                if turn_off:
+                    _LOGGER.info(
+                        "AC turn OFF check: avg=%.1f°C (%.1f°C below target), max=%.1f°C, "
+                        "threshold=%.1f°C → Turn OFF",
+                        avg_temp, abs(temp_diff), max_temp, self.ac_turn_off_threshold
+                    )
+                    return False
+                else:
+                    _LOGGER.debug(
+                        "AC stay ON: avg=%.1f°C (%.1f°C from target), threshold=%.1f°C",
+                        avg_temp, temp_diff, self.ac_turn_off_threshold
+                    )
+                    return True
+            else:
+                # AC is OFF: Turn ON if temp rises above target + threshold
+                turn_on = temp_diff >= self.ac_turn_on_threshold
+                if turn_on:
+                    _LOGGER.info(
+                        "AC turn ON check: avg=%.1f°C (+%.1f°C above target), "
+                        "threshold=%.1f°C → Turn ON",
+                        avg_temp, temp_diff, self.ac_turn_on_threshold
+                    )
+                    return True
+                else:
+                    _LOGGER.debug(
+                        "AC stay OFF: avg=%.1f°C (+%.1f°C from target), threshold=%.1f°C",
+                        avg_temp, temp_diff, self.ac_turn_on_threshold
+                    )
+                    return False
+
+        # For heating mode with hysteresis
         elif self.hvac_mode == "heat":
-            return avg_temp < (self.target_temperature - self.temperature_deadband)
-        else:  # auto mode
-            # Check if we're significantly off target in either direction
-            return abs(avg_temp - self.target_temperature) > self.temperature_deadband
+            if ac_currently_on:
+                # AC is ON: Turn OFF if temp rises significantly above target
+                # AND no rooms are below target (all rooms have warmed up)
+                min_temp = min(temps)
+                turn_off = (temp_diff >= self.ac_turn_off_threshold and
+                           min_temp >= self.target_temperature)
+                if turn_off:
+                    _LOGGER.info(
+                        "AC turn OFF check: avg=%.1f°C (+%.1f°C above target), min=%.1f°C, "
+                        "threshold=%.1f°C → Turn OFF",
+                        avg_temp, temp_diff, min_temp, self.ac_turn_off_threshold
+                    )
+                    return False
+                else:
+                    _LOGGER.debug(
+                        "AC stay ON: avg=%.1f°C (%.1f°C from target), threshold=%.1f°C",
+                        avg_temp, temp_diff, self.ac_turn_off_threshold
+                    )
+                    return True
+            else:
+                # AC is OFF: Turn ON if temp drops below target - threshold
+                turn_on = temp_diff <= -self.ac_turn_on_threshold
+                if turn_on:
+                    _LOGGER.info(
+                        "AC turn ON check: avg=%.1f°C (%.1f°C below target), "
+                        "threshold=%.1f°C → Turn ON",
+                        avg_temp, abs(temp_diff), self.ac_turn_on_threshold
+                    )
+                    return True
+                else:
+                    _LOGGER.debug(
+                        "AC stay OFF: avg=%.1f°C (%.1f°C from target), threshold=%.1f°C",
+                        avg_temp, temp_diff, self.ac_turn_on_threshold
+                    )
+                    return False
+
+        else:  # auto mode - use simple deadband (no hysteresis for auto)
+            return abs(temp_diff) > self.temperature_deadband
 
     async def _control_main_ac(
         self, needs_ac: bool, main_climate_state: dict[str, Any] | None
