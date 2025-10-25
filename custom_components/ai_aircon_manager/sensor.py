@@ -95,6 +95,7 @@ async def async_setup_entry(
     # Add debug sensors
     entities.append(SystemStatusDebugSensor(coordinator, config_entry))
     entities.append(LastOptimizationTimeSensor(coordinator, config_entry))
+    entities.append(LastAIOptimizationTimeSensor(coordinator, config_entry))
     entities.append(NextOptimizationTimeSensor(coordinator, config_entry))
     entities.append(ErrorTrackingSensor(coordinator, config_entry))
     entities.append(ValidSensorsCountSensor(coordinator, config_entry))
@@ -632,7 +633,7 @@ class LastOptimizationTimeSensor(AirconManagerSensorBase):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{config_entry.entry_id}_last_optimization_time"
-        self._attr_name = "Last Optimization Time"
+        self._attr_name = "Last Data Update Time"
         self._attr_icon = "mdi:clock-check"
 
     @property
@@ -671,6 +672,70 @@ class LastOptimizationTimeSensor(AirconManagerSensorBase):
                 attrs["next_update_in_seconds"] = None
         else:
             attrs["next_update_in_seconds"] = None
+
+        return attrs
+
+
+class LastAIOptimizationTimeSensor(AirconManagerSensorBase):
+    """Sensor showing when AI last ran (not just coordinator updates)."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_last_ai_optimization"
+        self._attr_name = "Last AI Optimization"
+        self._attr_icon = "mdi:brain"
+
+    @property
+    def native_value(self):
+        """Return the last AI optimization time."""
+        from datetime import datetime, timezone
+
+        if not self.coordinator.data:
+            return None
+
+        # Get optimizer from hass data
+        from .const import DOMAIN
+        entry_data = self.coordinator.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id, {})
+        optimizer = entry_data.get("optimizer")
+
+        if not optimizer:
+            return None
+
+        # Get actual AI optimization timestamp
+        if hasattr(optimizer, '_last_ai_optimization') and optimizer._last_ai_optimization:
+            return datetime.fromtimestamp(optimizer._last_ai_optimization, tz=timezone.utc)
+
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        import time
+
+        if not self.coordinator.data:
+            return {}
+
+        # Get optimizer from hass data
+        from .const import DOMAIN
+        entry_data = self.coordinator.hass.data.get(DOMAIN, {}).get(self._config_entry.entry_id, {})
+        optimizer = entry_data.get("optimizer")
+
+        if not optimizer:
+            return {"status": "optimizer_not_found"}
+
+        attrs = {}
+
+        if hasattr(optimizer, '_last_ai_optimization') and optimizer._last_ai_optimization:
+            current_time = time.time()
+            seconds_since = current_time - optimizer._last_ai_optimization
+            attrs["seconds_since_last_ai_run"] = round(seconds_since, 1)
+            attrs["minutes_since_last_ai_run"] = round(seconds_since / 60, 2)
+        else:
+            attrs["seconds_since_last_ai_run"] = None
+            attrs["status"] = "never_run"
 
         return attrs
 
