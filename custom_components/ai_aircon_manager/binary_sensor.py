@@ -60,7 +60,7 @@ class MainClimateRunningSensor(CoordinatorEntity, BinarySensorEntity):
 
         # Check if HVAC action is actively cooling/heating
         hvac_action = main_climate_state.get("hvac_action")
-        if hvac_action:
+        if hvac_action and hvac_action not in ["unknown", "unavailable", "idle", "off"]:
             return hvac_action in ["cooling", "heating"]
 
         # Fall back to checking if HVAC mode is on

@@ -540,21 +540,41 @@ class LastOptimizationTimeSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Return the last successful update time."""
-        return self.coordinator.last_update_success_time
+        # Use coordinator's internal last update time
+        from datetime import datetime, timezone
+        if hasattr(self.coordinator, '_last_update_time'):
+            return self.coordinator._last_update_time
+        # Fallback: return current time if data exists, None otherwise
+        if self.coordinator.data:
+            return datetime.now(timezone.utc)
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional attributes."""
-        return {
+        from datetime import datetime, timezone
+        import time
+
+        attrs = {
             "last_update_success": self.coordinator.last_update_success,
             "update_interval_minutes": self.coordinator.update_interval.total_seconds() / 60 if self.coordinator.update_interval else None,
-            "next_update_in_seconds": (
-                (self.coordinator.last_update_success_time + self.coordinator.update_interval -
-                 self.coordinator.hass.loop.time()).total_seconds()
-                if self.coordinator.last_update_success_time and self.coordinator.update_interval
-                else None
-            ),
         }
+
+        # Calculate next update time if possible
+        if hasattr(self.coordinator, '_last_update_time') and self.coordinator.update_interval:
+            try:
+                last_time = self.coordinator._last_update_time
+                if last_time:
+                    next_update = last_time + self.coordinator.update_interval
+                    now = datetime.now(timezone.utc)
+                    seconds_until = (next_update - now).total_seconds()
+                    attrs["next_update_in_seconds"] = max(0, seconds_until)
+            except Exception:
+                attrs["next_update_in_seconds"] = None
+        else:
+            attrs["next_update_in_seconds"] = None
+
+        return attrs
 
 
 class ErrorTrackingSensor(CoordinatorEntity, SensorEntity):

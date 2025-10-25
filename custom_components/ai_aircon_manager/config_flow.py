@@ -388,7 +388,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         current_overrides = self.config_entry.data.get(CONF_ROOM_OVERRIDES, {})
 
         if user_input is not None:
-            # Update room overrides
+            # Convert flat user_input to nested structure for storage
+            # user_input format: {"Living Room_enabled": True, "Bedroom_enabled": False}
+            # storage format: {"Living Room_enabled": False, "Bedroom_enabled": True}
+            # (we keep the flat structure since optimizer expects it this way)
             new_data = {**self.config_entry.data, CONF_ROOM_OVERRIDES: user_input}
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
@@ -401,8 +404,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         schema_dict = {}
         for room in current_rooms:
             room_name = room[CONF_ROOM_NAME]
-            # Default to enabled (not overridden) if not in overrides
-            is_enabled = current_overrides.get(room_name, {}).get("enabled", True)
+            # Default to enabled (True) if not in overrides
+            # current_overrides is flat: {"Living Room_enabled": False}
+            is_enabled = current_overrides.get(f"{room_name}_enabled", True)
             schema_dict[vol.Optional(f"{room_name}_enabled", default=is_enabled)] = cv.boolean
 
         if not schema_dict:

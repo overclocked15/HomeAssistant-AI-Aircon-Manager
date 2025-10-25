@@ -42,7 +42,7 @@ class AirconAIClimate(CoordinatorEntity, ClimateEntity):
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TURN_ON | ClimateEntityFeature.TURN_OFF
     )
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.COOL, HVACMode.AUTO]
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.COOL, HVACMode.HEAT, HVACMode.AUTO]
 
     def __init__(self, coordinator, optimizer, config_entry: ConfigEntry) -> None:
         """Initialize the climate entity."""
@@ -87,7 +87,16 @@ class AirconAIClimate(CoordinatorEntity, ClimateEntity):
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
 
+        # Update optimizer
         self._optimizer.target_temperature = temperature
+
+        # Persist to config entry
+        config_entry = self.hass.config_entries.async_get_entry(self._attr_unique_id.replace("_climate", ""))
+        if config_entry:
+            from .const import CONF_TARGET_TEMPERATURE
+            new_data = {**config_entry.data, CONF_TARGET_TEMPERATURE: temperature}
+            self.hass.config_entries.async_update_entry(config_entry, data=new_data)
+
         await self.coordinator.async_request_refresh()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:

@@ -135,6 +135,11 @@ class AirconOptimizer:
             # Determine and set main fan speed based on system state
             if self.main_fan_entity:
                 main_fan_speed = await self._determine_and_set_main_fan_speed(room_states)
+
+            # Reset error tracking on successful optimization
+            if recommendations:
+                self._last_error = None
+                self._error_count = 0
         else:
             _LOGGER.info("Main AC is not running - skipping optimization")
 
@@ -299,8 +304,8 @@ Where recommended_fan_speed is an integer between 0 and 100.
         import re
 
         try:
-            # Try to extract JSON from response
-            json_match = re.search(r"\{[^}]+\}", ai_response, re.DOTALL)
+            # Try to extract JSON from response - use non-greedy match to get complete JSON
+            json_match = re.search(r"\{.*?\}", ai_response, re.DOTALL)
             if json_match:
                 recommendations = json.loads(json_match.group())
                 # Validate and clamp values
@@ -312,6 +317,7 @@ Where recommended_fan_speed is an integer between 0 and 100.
                 return validated
         except Exception as e:
             _LOGGER.error("Error parsing AI response: %s", e)
+            _LOGGER.debug("AI response was: %s", ai_response)
 
         return {}
 
