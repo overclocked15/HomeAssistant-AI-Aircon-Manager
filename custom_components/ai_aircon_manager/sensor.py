@@ -248,7 +248,7 @@ class AIOptimizationStatusSensor(AirconManagerSensorBase):
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{config_entry.entry_id}_optimization_status"
         self._attr_name = "AI Optimization Status"
 
@@ -327,7 +327,7 @@ class AILastResponseSensor(AirconManagerSensorBase):
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{config_entry.entry_id}_last_ai_response"
         self._attr_name = "AI Last Response"
 
@@ -360,7 +360,7 @@ class MainFanSpeedSensor(AirconManagerSensorBase):
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{config_entry.entry_id}_main_fan_speed"
         self._attr_name = "Main Aircon Fan Speed"
         self._attr_icon = "mdi:fan"
@@ -414,7 +414,7 @@ class MainFanSpeedRecommendationSensor(AirconManagerSensorBase):
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{config_entry.entry_id}_main_fan_recommendation_debug"
         self._attr_name = "Main Fan Speed AI Recommendation"
         self._attr_icon = "mdi:fan-alert"
@@ -541,7 +541,7 @@ class SystemStatusDebugSensor(AirconManagerSensorBase):
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{config_entry.entry_id}_system_status_debug"
         self._attr_name = "System Status Debug"
         self._attr_icon = "mdi:bug"
@@ -592,7 +592,7 @@ class LastOptimizationTimeSensor(AirconManagerSensorBase):
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{config_entry.entry_id}_last_optimization_time"
         self._attr_name = "Last Optimization Time"
         self._attr_icon = "mdi:clock-check"
@@ -642,7 +642,7 @@ class ErrorTrackingSensor(AirconManagerSensorBase):
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{config_entry.entry_id}_error_tracking"
         self._attr_name = "Error Tracking"
         self._attr_icon = "mdi:alert-circle"
@@ -672,7 +672,7 @@ class ValidSensorsCountSensor(AirconManagerSensorBase):
 
     def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator)
+        super().__init__(coordinator, config_entry)
         self._attr_unique_id = f"{config_entry.entry_id}_valid_sensors_count"
         self._attr_name = "Valid Sensors Count"
         self._attr_icon = "mdi:thermometer-check"
