@@ -30,6 +30,19 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
 - **Startup Delay**: Grace period during Home Assistant startup to prevent false alarms
 - **Persistent Notifications**: Optional notifications for important events (AC control, errors)
 
+### Smart Automation Features (v1.8.0+)
+- **Weather Integration**: Automatically adjusts target temperature based on outdoor conditions
+  - Hot weather (>30°C): Sets AC slightly cooler to combat heat
+  - Cold weather (<15°C): Sets AC slightly warmer to prevent overcooling
+  - Supports weather entities and outdoor temperature sensors
+- **Time-Based Scheduling**: Different target temperatures for different times and days
+  - Multiple schedules with individual target temperatures
+  - Day-of-week scheduling (weekdays, weekends, specific days, or all days)
+  - Time range support including cross-midnight schedules (e.g., 22:00-08:00)
+  - Schedule priority over base target temperature
+- **Enhanced Overshoot Handling**: More aggressive fan shutoff for rooms that overshoot target
+- **Improved Main Fan Logic**: Smarter thresholds for low/medium/high fan speeds
+
 ## How It Works
 
 1. The integration monitors temperature sensors in each configured room
@@ -127,6 +140,8 @@ You can change settings after initial setup:
    - **Change Settings**: Update target temperature, AI model, HVAC mode, main climate entity, etc.
    - **Manage Rooms**: Add or remove rooms
    - **Room Overrides**: Enable/disable AI control for specific rooms
+   - **Weather**: Configure weather integration and outdoor temperature adjustments
+   - **Schedules**: Manage time-based temperature schedules
 
 #### Key Settings
 
@@ -161,6 +176,48 @@ To disable AI control for specific rooms:
 2. Select **"Room Overrides"**
 3. **Uncheck** any rooms you want to exclude from AI control
 4. Those rooms will keep their last fan speed but won't be adjusted by AI
+
+#### Weather Integration
+
+To enable weather-based temperature adjustments:
+
+1. Go to **Settings** → **Devices & Services** → **AI Aircon Manager** → **Configure**
+2. Select **"Weather"**
+3. **Enable weather adjustment** checkbox
+4. Select your **weather entity** (e.g., `weather.home`) OR **outdoor temperature sensor** (or both for redundancy)
+5. Save
+
+**How it works:**
+- Hot outdoor temps (>30°C): Target reduced by 0.25-0.5°C for better cooling
+- Cold outdoor temps (<15°C): Target increased by 0.25-0.5°C to prevent overcooling
+- Mild temps (20-25°C): No adjustment
+
+#### Time-Based Scheduling
+
+To create temperature schedules:
+
+1. Go to **Settings** → **Devices & Services** → **AI Aircon Manager** → **Configure**
+2. Select **"Schedules"**
+3. Choose an action:
+   - **Enable Scheduling**: Turn scheduling on/off
+   - **Add Schedule**: Create a new schedule
+   - **Delete Schedule**: Remove an existing schedule
+
+**Creating a Schedule:**
+1. Select **"Add Schedule"**
+2. Enter:
+   - **Name**: e.g., "Sleep Mode", "Work Hours"
+   - **Days**: Select which days (weekdays, weekends, specific days, or all)
+   - **Start Time**: When the schedule begins (e.g., 22:00)
+   - **End Time**: When it ends (e.g., 08:00) - can cross midnight
+   - **Target Temperature**: Desired temp during this period (e.g., 20°C for sleeping)
+   - **Enabled**: Whether this schedule is active
+3. Save
+
+**Examples:**
+- **Sleep Schedule**: 22:00-08:00, All Days, 20°C (cooler for sleeping)
+- **Work Hours**: 09:00-17:00, Weekdays, 24°C (warmer when home is empty)
+- **Weekend Comfort**: 08:00-23:00, Weekends, 22°C
 
 ## Cost Optimization
 
@@ -278,6 +335,18 @@ The integration creates comprehensive diagnostic sensors:
 - `sensor.main_fan_speed_recommendation` - AI's recommended main fan speed
 - `binary_sensor.main_aircon_running` - Whether main AC is running
   - Attributes: HVAC mode, action, temperatures
+
+#### Weather Integration Sensors (if enabled)
+- `sensor.outdoor_temperature` - Current outdoor temperature
+  - Source: Weather entity or outdoor temperature sensor
+- `sensor.weather_adjustment` - Temperature adjustment based on outdoor conditions
+  - Attributes: outdoor temp, base target, effective target, adjustment applied
+
+#### Scheduling Sensors (if enabled)
+- `sensor.active_schedule` - Currently active schedule name
+  - Attributes: schedule details (days, times, target temperature, status)
+- `sensor.effective_target_temperature` - Final target after schedule and weather adjustments
+  - Attributes: base target, weather adjustment, schedule info
 
 ### Main Aircon Fan Control Logic
 
