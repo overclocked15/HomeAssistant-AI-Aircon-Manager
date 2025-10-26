@@ -69,6 +69,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ai_model=entry.data.get(CONF_AI_MODEL, default_model),
         ac_turn_on_threshold=entry.data.get("ac_turn_on_threshold", DEFAULT_AC_TURN_ON_THRESHOLD),
         ac_turn_off_threshold=entry.data.get("ac_turn_off_threshold", DEFAULT_AC_TURN_OFF_THRESHOLD),
+        weather_entity=entry.data.get("weather_entity"),
+        enable_weather_adjustment=entry.data.get("enable_weather_adjustment", False),
+        outdoor_temp_sensor=entry.data.get("outdoor_temp_sensor"),
+        enable_scheduling=entry.data.get("enable_scheduling", False),
+        schedules=entry.data.get("schedules", []),
     )
 
     # Get update interval from config (for AI optimization)

@@ -32,6 +32,11 @@ class AirconOptimizer:
         ai_model: str | None = None,
         ac_turn_on_threshold: float = 1.0,
         ac_turn_off_threshold: float = 2.0,
+        weather_entity: str | None = None,
+        enable_weather_adjustment: bool = False,
+        outdoor_temp_sensor: str | None = None,
+        enable_scheduling: bool = False,
+        schedules: list[dict[str, Any]] | None = None,
     ) -> None:
         """Initialize the optimizer."""
         self.hass = hass
@@ -51,6 +56,11 @@ class AirconOptimizer:
         self.config_entry = config_entry
         self.ac_turn_on_threshold = ac_turn_on_threshold
         self.ac_turn_off_threshold = ac_turn_off_threshold
+        self.weather_entity = weather_entity
+        self.enable_weather_adjustment = enable_weather_adjustment
+        self.outdoor_temp_sensor = outdoor_temp_sensor
+        self.enable_scheduling = enable_scheduling
+        self.schedules = schedules or []
         self._ai_client = None
         self._last_ai_response = None
         self._last_error = None
@@ -62,6 +72,8 @@ class AirconOptimizer:
         self._ai_optimization_interval = DEFAULT_UPDATE_INTERVAL * 60  # Convert minutes to seconds
         self._last_recommendations = {}
         self._last_main_fan_speed = None
+        self._current_schedule = None
+        self._outdoor_temperature = None
 
     async def async_setup(self) -> None:
         """Set up the AI client."""
@@ -81,13 +93,182 @@ class AirconOptimizer:
                 return openai.AsyncOpenAI(api_key=self.api_key)
             self._ai_client = await asyncio.to_thread(setup_openai)
 
+    def _get_active_schedule(self) -> dict[str, Any] | None:
+        """Get the currently active schedule based on time and day."""
+        if not self.enable_scheduling or not self.schedules:
+            return None
+
+        from datetime import datetime
+        now = datetime.now()
+        current_time = now.time()
+        current_day = now.strftime("%A").lower()  # monday, tuesday, etc.
+
+        for schedule in self.schedules:
+            if not schedule.get(CONF_SCHEDULE_ENABLED, True):
+                continue
+
+            # Check if schedule applies to current day
+            schedule_days = schedule.get(CONF_SCHEDULE_DAYS, [])
+            if not schedule_days:
+                continue
+
+            from .const import CONF_SCHEDULE_DAYS, CONF_SCHEDULE_START_TIME, CONF_SCHEDULE_END_TIME, CONF_SCHEDULE_ENABLED
+
+            # Check day match
+            day_match = False
+            if "all" in schedule_days:
+                day_match = True
+            elif "weekdays" in schedule_days and current_day in ["monday", "tuesday", "wednesday", "thursday", "friday"]:
+                day_match = True
+            elif "weekends" in schedule_days and current_day in ["saturday", "sunday"]:
+                day_match = True
+            elif current_day in schedule_days:
+                day_match = True
+
+            if not day_match:
+                continue
+
+            # Check time range
+            start_time = schedule.get(CONF_SCHEDULE_START_TIME)
+            end_time = schedule.get(CONF_SCHEDULE_END_TIME)
+
+            if not start_time or not end_time:
+                continue
+
+            # Parse time strings (format: "HH:MM")
+            try:
+                from datetime import time as dt_time
+                start_hour, start_min = map(int, start_time.split(":"))
+                end_hour, end_min = map(int, end_time.split(":"))
+                start_t = dt_time(start_hour, start_min)
+                end_t = dt_time(end_hour, end_min)
+
+                # Handle schedules that cross midnight
+                if start_t <= end_t:
+                    # Normal range (e.g., 08:00 to 22:00)
+                    if start_t <= current_time <= end_t:
+                        _LOGGER.info("Active schedule found: %s", schedule.get(CONF_SCHEDULE_NAME, "Unnamed"))
+                        return schedule
+                else:
+                    # Crosses midnight (e.g., 22:00 to 08:00)
+                    if current_time >= start_t or current_time <= end_t:
+                        _LOGGER.info("Active schedule found: %s (crosses midnight)", schedule.get(CONF_SCHEDULE_NAME, "Unnamed"))
+                        return schedule
+            except (ValueError, AttributeError) as e:
+                _LOGGER.warning("Invalid schedule time format: %s", e)
+                continue
+
+        return None
+
+    async def _get_outdoor_temperature(self) -> float | None:
+        """Get outdoor temperature from weather entity or outdoor sensor."""
+        if self.outdoor_temp_sensor:
+            # Prefer dedicated outdoor sensor
+            sensor_state = self.hass.states.get(self.outdoor_temp_sensor)
+            if sensor_state and sensor_state.state not in ["unknown", "unavailable", "none", None]:
+                try:
+                    temp = float(sensor_state.state)
+                    unit = sensor_state.attributes.get("unit_of_measurement", "°C")
+                    # Convert F to C if needed
+                    if unit in ["°F", "fahrenheit", "F"]:
+                        temp = (temp - 32) * 5.0 / 9.0
+                    self._outdoor_temperature = temp
+                    return temp
+                except (ValueError, TypeError) as e:
+                    _LOGGER.warning("Could not read outdoor temperature sensor: %s", e)
+
+        if self.weather_entity:
+            # Try weather entity
+            weather_state = self.hass.states.get(self.weather_entity)
+            if weather_state:
+                temp = weather_state.attributes.get("temperature")
+                if temp is not None:
+                    try:
+                        temp = float(temp)
+                        # Weather entities typically report in configured unit
+                        self._outdoor_temperature = temp
+                        return temp
+                    except (ValueError, TypeError) as e:
+                        _LOGGER.warning("Could not read weather temperature: %s", e)
+
+        return None
+
+    def _calculate_weather_adjusted_target(self, base_target: float, outdoor_temp: float) -> float:
+        """Calculate weather-adjusted target temperature.
+
+        Logic:
+        - If it's hot outside (>30°C), set AC slightly cooler to combat heat
+        - If it's mild outside (20-25°C), keep target as-is
+        - If it's cold outside (<15°C), set AC slightly warmer to prevent overcooling
+        """
+        from .const import WEATHER_TEMP_INFLUENCE
+
+        if outdoor_temp > 30:
+            # Very hot outside - set AC 0.5°C cooler
+            adjustment = -0.5 * WEATHER_TEMP_INFLUENCE
+            _LOGGER.debug("Hot weather (%.1f°C) - adjusting target by %.1f°C", outdoor_temp, adjustment)
+        elif outdoor_temp > 25:
+            # Warm outside - set AC 0.25°C cooler
+            adjustment = -0.25 * WEATHER_TEMP_INFLUENCE
+            _LOGGER.debug("Warm weather (%.1f°C) - adjusting target by %.1f°C", outdoor_temp, adjustment)
+        elif outdoor_temp < 15:
+            # Cold outside - set AC 0.5°C warmer to prevent overcooling
+            adjustment = 0.5 * WEATHER_TEMP_INFLUENCE
+            _LOGGER.debug("Cold weather (%.1f°C) - adjusting target by %.1f°C", outdoor_temp, adjustment)
+        elif outdoor_temp < 20:
+            # Cool outside - set AC 0.25°C warmer
+            adjustment = 0.25 * WEATHER_TEMP_INFLUENCE
+            _LOGGER.debug("Cool weather (%.1f°C) - adjusting target by %.1f°C", outdoor_temp, adjustment)
+        else:
+            # Mild weather - no adjustment needed
+            adjustment = 0.0
+            _LOGGER.debug("Mild weather (%.1f°C) - no adjustment", outdoor_temp)
+
+        adjusted = base_target + adjustment
+        return round(adjusted, 1)
+
     async def async_optimize(self) -> dict[str, Any]:
         """Run optimization cycle."""
         if not self._ai_client:
             await self.async_setup()
 
+        # Check for active schedule and update target temperature if needed
+        active_schedule = None
+        effective_target = self.target_temperature
+        if self.enable_scheduling:
+            active_schedule = self._get_active_schedule()
+            if active_schedule:
+                from .const import CONF_SCHEDULE_TARGET_TEMP, CONF_SCHEDULE_NAME
+                schedule_temp = active_schedule.get(CONF_SCHEDULE_TARGET_TEMP)
+                if schedule_temp is not None:
+                    effective_target = float(schedule_temp)
+                    _LOGGER.info(
+                        "Schedule '%s' active - using target temperature: %.1f°C",
+                        active_schedule.get(CONF_SCHEDULE_NAME, "Unnamed"),
+                        effective_target
+                    )
+                self._current_schedule = active_schedule
+            else:
+                self._current_schedule = None
+
+        # Check weather and adjust target if enabled
+        outdoor_temp = None
+        weather_adjustment = 0.0
+        if self.enable_weather_adjustment:
+            outdoor_temp = await self._get_outdoor_temperature()
+            if outdoor_temp is not None:
+                adjusted_target = self._calculate_weather_adjusted_target(effective_target, outdoor_temp)
+                weather_adjustment = adjusted_target - effective_target
+                effective_target = adjusted_target
+                _LOGGER.info(
+                    "Weather adjustment: outdoor %.1f°C, adjustment %.1f°C, new target %.1f°C",
+                    outdoor_temp,
+                    weather_adjustment,
+                    effective_target
+                )
+
         # Collect current state of all rooms
-        room_states = await self._collect_room_states()
+        room_states = await self._collect_room_states(effective_target)
 
         # Get main climate entity state if configured
         main_climate_state = None
@@ -255,6 +436,11 @@ class AirconOptimizer:
             "needs_ac": needs_ac,
             "last_error": self._last_error,
             "error_count": self._error_count,
+            "active_schedule": active_schedule,
+            "effective_target_temperature": effective_target,
+            "base_target_temperature": self.target_temperature,
+            "weather_adjustment": weather_adjustment,
+            "outdoor_temperature": outdoor_temp,
         }
 
         _LOGGER.info(
@@ -267,9 +453,11 @@ class AirconOptimizer:
 
         return result
 
-    async def _collect_room_states(self) -> dict[str, dict[str, Any]]:
+    async def _collect_room_states(self, target_temperature: float | None = None) -> dict[str, dict[str, Any]]:
         """Collect current temperature and cover state for all rooms."""
         room_states = {}
+        # Use provided target or fall back to instance target
+        effective_target = target_temperature if target_temperature is not None else self.target_temperature
 
         for room in self.room_configs:
             room_name = room["room_name"]
@@ -358,7 +546,7 @@ class AirconOptimizer:
 
             room_states[room_name] = {
                 "current_temperature": current_temp,
-                "target_temperature": self.target_temperature,
+                "target_temperature": effective_target,
                 "cover_position": cover_position,
                 "temperature_sensor": temp_sensor,
                 "cover_entity": cover_entity,

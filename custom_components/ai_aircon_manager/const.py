@@ -22,6 +22,21 @@ CONF_ROOM_OVERRIDES = "room_overrides"
 CONF_AC_TURN_ON_THRESHOLD = "ac_turn_on_threshold"
 CONF_AC_TURN_OFF_THRESHOLD = "ac_turn_off_threshold"
 
+# Weather integration
+CONF_WEATHER_ENTITY = "weather_entity"
+CONF_ENABLE_WEATHER_ADJUSTMENT = "enable_weather_adjustment"
+CONF_OUTDOOR_TEMP_SENSOR = "outdoor_temp_sensor"
+
+# Time-based scheduling
+CONF_ENABLE_SCHEDULING = "enable_scheduling"
+CONF_SCHEDULES = "schedules"
+CONF_SCHEDULE_NAME = "schedule_name"
+CONF_SCHEDULE_DAYS = "schedule_days"
+CONF_SCHEDULE_START_TIME = "schedule_start_time"
+CONF_SCHEDULE_END_TIME = "schedule_end_time"
+CONF_SCHEDULE_TARGET_TEMP = "schedule_target_temp"
+CONF_SCHEDULE_ENABLED = "schedule_enabled"
+
 # AI Providers
 AI_PROVIDER_CLAUDE = "claude"
 AI_PROVIDER_CHATGPT = "chatgpt"
@@ -58,3 +73,23 @@ DEFAULT_ENABLE_NOTIFICATIONS = True
 DEFAULT_STARTUP_DELAY = 120  # seconds (2 minutes) - prevents notifications during boot
 DEFAULT_AC_TURN_ON_THRESHOLD = 1.0  # degrees C above target to turn AC on
 DEFAULT_AC_TURN_OFF_THRESHOLD = 2.0  # degrees C below target to turn AC off
+DEFAULT_ENABLE_WEATHER_ADJUSTMENT = False
+DEFAULT_ENABLE_SCHEDULING = False
+
+# Weather adjustment parameters
+WEATHER_TEMP_INFLUENCE = 0.5  # How much outdoor temp influences AC setpoint (0.0-1.0)
+WEATHER_FORECAST_HOURS = 2  # How many hours ahead to consider
+
+# Days of week for scheduling
+SCHEDULE_DAYS_OPTIONS = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+    "weekdays",
+    "weekends",
+    "all"
+]
