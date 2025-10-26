@@ -128,7 +128,7 @@ class AirconAIClimate(CoordinatorEntity, ClimateEntity):
         room_states = self.coordinator.data.get("room_states", {})
         recommendations = self.coordinator.data.get("recommendations", {})
 
-        return {
+        attrs = {
             "room_temperatures": {
                 room: state["current_temperature"]
                 for room, state in room_states.items()
@@ -138,3 +138,23 @@ class AirconAIClimate(CoordinatorEntity, ClimateEntity):
             },
             "ai_recommendations": recommendations,
         }
+
+        # Add effective target if scheduling/weather is active
+        effective_target = self.coordinator.data.get("effective_target_temperature")
+        if effective_target and effective_target != self._optimizer.target_temperature:
+            attrs["effective_target_temperature"] = effective_target
+            attrs["base_target_temperature"] = self._optimizer.target_temperature
+
+            # Add schedule info if active
+            active_schedule = self.coordinator.data.get("active_schedule")
+            if active_schedule:
+                from .const import CONF_SCHEDULE_NAME
+                attrs["active_schedule"] = active_schedule.get(CONF_SCHEDULE_NAME)
+
+            # Add weather adjustment if present
+            weather_adj = self.coordinator.data.get("weather_adjustment")
+            if weather_adj and weather_adj != 0:
+                attrs["weather_adjustment"] = weather_adj
+                attrs["outdoor_temperature"] = self.coordinator.data.get("outdoor_temperature")
+
+        return attrs

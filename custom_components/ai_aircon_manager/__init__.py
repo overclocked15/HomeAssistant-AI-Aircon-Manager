@@ -38,7 +38,7 @@ def get_device_info(config_entry: ConfigEntry) -> dict:
         "name": "AI Aircon Manager",
         "manufacturer": "AI Aircon Manager",
         "model": "AI-Powered HVAC Controller",
-        "sw_version": "1.7.1",
+        "sw_version": "1.8.0",
     }
 
 

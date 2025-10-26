@@ -30,6 +30,18 @@ from .const import (
     CONF_AUTO_CONTROL_AC_TEMPERATURE,
     CONF_ENABLE_NOTIFICATIONS,
     CONF_ROOM_OVERRIDES,
+    CONF_WEATHER_ENTITY,
+    CONF_ENABLE_WEATHER_ADJUSTMENT,
+    CONF_OUTDOOR_TEMP_SENSOR,
+    CONF_ENABLE_SCHEDULING,
+    CONF_SCHEDULES,
+    CONF_SCHEDULE_NAME,
+    CONF_SCHEDULE_DAYS,
+    CONF_SCHEDULE_START_TIME,
+    CONF_SCHEDULE_END_TIME,
+    CONF_SCHEDULE_TARGET_TEMP,
+    CONF_SCHEDULE_ENABLED,
+    SCHEDULE_DAYS_OPTIONS,
     AI_PROVIDER_CLAUDE,
     AI_PROVIDER_CHATGPT,
     CLAUDE_MODELS,
@@ -174,7 +186,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options - show menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["settings", "manage_rooms", "room_overrides"],
+            menu_options=["settings", "manage_rooms", "room_overrides", "weather", "schedules"],
         )
 
     async def async_step_settings(
@@ -461,4 +473,197 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             description_placeholders={
                 "room_count": str(len(current_rooms)),
             },
+        )
+
+    async def async_step_weather(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle weather integration configuration."""
+        if user_input is not None:
+            # Merge with existing data
+            new_data = {**self.config_entry.data, **user_input}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            # Reload the integration to apply changes
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="weather",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_ENABLE_WEATHER_ADJUSTMENT,
+                        default=self.config_entry.data.get(CONF_ENABLE_WEATHER_ADJUSTMENT, False),
+                    ): cv.boolean,
+                    vol.Optional(
+                        CONF_WEATHER_ENTITY,
+                        default=self.config_entry.data.get(CONF_WEATHER_ENTITY),
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="weather")
+                    ),
+                    vol.Optional(
+                        CONF_OUTDOOR_TEMP_SENSOR,
+                        default=self.config_entry.data.get(CONF_OUTDOOR_TEMP_SENSOR),
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+                    ),
+                }
+            ),
+            description_placeholders={
+                "info": "Weather integration adjusts target temperature based on outdoor conditions. Provide either a weather entity or outdoor temperature sensor (or both for redundancy)."
+            },
+        )
+
+    async def async_step_schedules(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle schedules configuration - show submenu."""
+        return self.async_show_menu(
+            step_id="schedules",
+            menu_options=["enable_scheduling", "add_schedule", "edit_schedule", "delete_schedule"],
+        )
+
+    async def async_step_enable_scheduling(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Enable or disable scheduling."""
+        if user_input is not None:
+            new_data = {**self.config_entry.data, **user_input}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="enable_scheduling",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_ENABLE_SCHEDULING,
+                        default=self.config_entry.data.get(CONF_ENABLE_SCHEDULING, False),
+                    ): cv.boolean,
+                }
+            ),
+        )
+
+    async def async_step_add_schedule(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Add a new schedule."""
+        if user_input is not None:
+            # Get existing schedules
+            current_schedules = list(self.config_entry.data.get(CONF_SCHEDULES, []))
+            # Add new schedule
+            new_schedule = {
+                CONF_SCHEDULE_NAME: user_input[CONF_SCHEDULE_NAME],
+                CONF_SCHEDULE_DAYS: user_input[CONF_SCHEDULE_DAYS],
+                CONF_SCHEDULE_START_TIME: user_input[CONF_SCHEDULE_START_TIME],
+                CONF_SCHEDULE_END_TIME: user_input[CONF_SCHEDULE_END_TIME],
+                CONF_SCHEDULE_TARGET_TEMP: user_input[CONF_SCHEDULE_TARGET_TEMP],
+                CONF_SCHEDULE_ENABLED: user_input.get(CONF_SCHEDULE_ENABLED, True),
+            }
+            current_schedules.append(new_schedule)
+
+            # Update config
+            new_data = {**self.config_entry.data, CONF_SCHEDULES: current_schedules}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="add_schedule",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_SCHEDULE_NAME): cv.string,
+                    vol.Required(CONF_SCHEDULE_DAYS): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=SCHEDULE_DAYS_OPTIONS,
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Required(CONF_SCHEDULE_START_TIME): selector.TimeSelector(),
+                    vol.Required(CONF_SCHEDULE_END_TIME): selector.TimeSelector(),
+                    vol.Required(CONF_SCHEDULE_TARGET_TEMP, default=22): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=16, max=30, step=0.5, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="°C"
+                        )
+                    ),
+                    vol.Optional(CONF_SCHEDULE_ENABLED, default=True): cv.boolean,
+                }
+            ),
+        )
+
+    async def async_step_edit_schedule(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Edit an existing schedule."""
+        current_schedules = self.config_entry.data.get(CONF_SCHEDULES, [])
+
+        if not current_schedules:
+            return self.async_show_form(
+                step_id="edit_schedule",
+                data_schema=vol.Schema({}),
+                description_placeholders={
+                    "message": "No schedules configured. Add a schedule first."
+                },
+            )
+
+        # For simplicity, show a message that editing is done via delete+add
+        return self.async_show_form(
+            step_id="edit_schedule",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "message": f"You have {len(current_schedules)} schedule(s). To edit, delete the old one and add a new one."
+            },
+        )
+
+    async def async_step_delete_schedule(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Delete a schedule."""
+        current_schedules = list(self.config_entry.data.get(CONF_SCHEDULES, []))
+
+        if not current_schedules:
+            return self.async_show_form(
+                step_id="delete_schedule",
+                data_schema=vol.Schema({}),
+                description_placeholders={
+                    "message": "No schedules to delete."
+                },
+            )
+
+        if user_input is not None:
+            # Remove the selected schedule
+            schedule_name = user_input["schedule_to_delete"]
+            current_schedules = [s for s in current_schedules if s.get(CONF_SCHEDULE_NAME) != schedule_name]
+
+            # Update config
+            new_data = {**self.config_entry.data, CONF_SCHEDULES: current_schedules}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        # Build list of schedule names for selection
+        schedule_options = [s.get(CONF_SCHEDULE_NAME, "Unnamed") for s in current_schedules]
+
+        return self.async_show_form(
+            step_id="delete_schedule",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("schedule_to_delete"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=schedule_options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
         )

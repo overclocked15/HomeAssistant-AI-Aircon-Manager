@@ -110,6 +110,16 @@ async def async_setup_entry(
         entities.append(ACTemperatureRecommendationSensor(coordinator, config_entry))
         entities.append(ACCurrentTemperatureSensor(coordinator, config_entry))
 
+    # Add weather sensors if weather integration is enabled
+    if optimizer.enable_weather_adjustment:
+        entities.append(OutdoorTemperatureSensor(coordinator, config_entry))
+        entities.append(WeatherAdjustmentSensor(coordinator, config_entry))
+
+    # Add scheduling sensors if scheduling is enabled
+    if optimizer.enable_scheduling:
+        entities.append(ActiveScheduleSensor(coordinator, config_entry))
+        entities.append(EffectiveTargetTemperatureSensor(coordinator, config_entry))
+
     _LOGGER.info("Total entities to add: %d", len(entities))
     _LOGGER.info("Entity unique_ids: %s", [e.unique_id for e in entities if hasattr(e, 'unique_id')])
 
@@ -1030,3 +1040,163 @@ class ACCurrentTemperatureSensor(AirconManagerSensorBase):
             attrs["needs_update"] = False
 
         return attrs
+
+
+
+class OutdoorTemperatureSensor(AirconManagerSensorBase):
+    """Sensor showing outdoor temperature from weather integration."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_outdoor_temperature"
+        self._attr_name = "Outdoor Temperature"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the outdoor temperature."""
+        if not self.coordinator.data:
+            return None
+        return self.coordinator.data.get("outdoor_temperature")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        return {
+            "source": "weather_integration",
+        }
+
+
+class WeatherAdjustmentSensor(AirconManagerSensorBase):
+    """Sensor showing weather-based temperature adjustment."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_weather_adjustment"
+        self._attr_name = "Weather Adjustment"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the weather adjustment amount."""
+        if not self.coordinator.data:
+            return None
+        return self.coordinator.data.get("weather_adjustment", 0.0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if not self.coordinator.data:
+            return {}
+
+        outdoor_temp = self.coordinator.data.get("outdoor_temperature")
+        base_target = self.coordinator.data.get("base_target_temperature")
+        effective_target = self.coordinator.data.get("effective_target_temperature")
+
+        return {
+            "outdoor_temperature": outdoor_temp,
+            "base_target": base_target,
+            "effective_target": effective_target,
+            "adjustment_applied": self.native_value \!= 0.0 if self.native_value is not None else False,
+        }
+
+
+class ActiveScheduleSensor(AirconManagerSensorBase):
+    """Sensor showing the currently active schedule."""
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_active_schedule"
+        self._attr_name = "Active Schedule"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the active schedule name."""
+        if not self.coordinator.data:
+            return None
+
+        from .const import CONF_SCHEDULE_NAME
+        active_schedule = self.coordinator.data.get("active_schedule")
+        if active_schedule:
+            return active_schedule.get(CONF_SCHEDULE_NAME, "Unnamed Schedule")
+        return "None"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if not self.coordinator.data:
+            return {}
+
+        from .const import (
+            CONF_SCHEDULE_NAME,
+            CONF_SCHEDULE_DAYS,
+            CONF_SCHEDULE_START_TIME,
+            CONF_SCHEDULE_END_TIME,
+            CONF_SCHEDULE_TARGET_TEMP,
+        )
+
+        active_schedule = self.coordinator.data.get("active_schedule")
+        if not active_schedule:
+            return {"status": "No active schedule"}
+
+        return {
+            "schedule_name": active_schedule.get(CONF_SCHEDULE_NAME),
+            "days": active_schedule.get(CONF_SCHEDULE_DAYS, []),
+            "start_time": active_schedule.get(CONF_SCHEDULE_START_TIME),
+            "end_time": active_schedule.get(CONF_SCHEDULE_END_TIME),
+            "target_temperature": active_schedule.get(CONF_SCHEDULE_TARGET_TEMP),
+            "status": "Active",
+        }
+
+
+class EffectiveTargetTemperatureSensor(AirconManagerSensorBase):
+    """Sensor showing the effective target temperature (after schedule and weather adjustments)."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = f"{config_entry.entry_id}_effective_target_temperature"
+        self._attr_name = "Effective Target Temperature"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the effective target temperature."""
+        if not self.coordinator.data:
+            return None
+        return self.coordinator.data.get("effective_target_temperature")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if not self.coordinator.data:
+            return {}
+
+        base_target = self.coordinator.data.get("base_target_temperature")
+        weather_adj = self.coordinator.data.get("weather_adjustment", 0.0)
+        active_schedule = self.coordinator.data.get("active_schedule")
+
+        attrs = {
+            "base_target": base_target,
+            "weather_adjustment": weather_adj,
+        }
+
+        if active_schedule:
+            from .const import CONF_SCHEDULE_NAME, CONF_SCHEDULE_TARGET_TEMP
+            attrs["schedule_name"] = active_schedule.get(CONF_SCHEDULE_NAME)
+            attrs["schedule_target"] = active_schedule.get(CONF_SCHEDULE_TARGET_TEMP)
+
+        return attrs
+
