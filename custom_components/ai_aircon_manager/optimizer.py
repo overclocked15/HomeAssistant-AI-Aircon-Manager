@@ -66,14 +66,20 @@ class AirconOptimizer:
     async def async_setup(self) -> None:
         """Set up the AI client."""
         import time
+        import asyncio
         self._startup_time = time.time()
 
+        # Import AI libraries in executor to avoid blocking the event loop
         if self.ai_provider == "claude":
-            import anthropic
-            self._ai_client = anthropic.AsyncAnthropic(api_key=self.api_key)
+            def setup_claude():
+                import anthropic
+                return anthropic.AsyncAnthropic(api_key=self.api_key)
+            self._ai_client = await asyncio.to_thread(setup_claude)
         elif self.ai_provider == "chatgpt":
-            import openai
-            self._ai_client = openai.AsyncOpenAI(api_key=self.api_key)
+            def setup_openai():
+                import openai
+                return openai.AsyncOpenAI(api_key=self.api_key)
+            self._ai_client = await asyncio.to_thread(setup_openai)
 
     async def async_optimize(self) -> dict[str, Any]:
         """Run optimization cycle."""
