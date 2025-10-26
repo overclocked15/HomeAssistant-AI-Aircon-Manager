@@ -41,7 +41,9 @@
         "menu_options": {
           "settings": "Change Settings (temperature, entities, modes)",
           "manage_rooms": "Manage Rooms (add/remove rooms)",
-          "room_overrides": "Room Overrides (enable/disable AI control per room)"
+          "room_overrides": "Room Overrides (enable/disable AI control per room)",
+          "weather": "Weather Integration (outdoor temperature adjustments)",
+          "schedules": "Time-Based Scheduling (different temps for different times)"
         }
       },
       "settings": {
@@ -87,6 +89,56 @@
         "title": "Room Overrides",
         "description": "Enable or disable AI control for each room. Disabled rooms will not have their fan speeds adjusted by the AI. You have {room_count} room(s) configured.\n\nCheck the box to ENABLE AI control, uncheck to DISABLE.",
         "data": {}
+      },
+      "weather": {
+        "title": "Weather Integration",
+        "description": "Configure outdoor temperature adjustments. The system will automatically adjust target temperature based on outdoor conditions.\n\n{info}",
+        "data": {
+          "enable_weather_adjustment": "Enable weather-based temperature adjustments",
+          "weather_entity": "Weather Entity (e.g., weather.home)",
+          "outdoor_temp_sensor": "Outdoor Temperature Sensor (alternative or backup)"
+        }
+      },
+      "schedules": {
+        "title": "Time-Based Scheduling",
+        "description": "Manage temperature schedules for different times and days",
+        "menu_options": {
+          "enable_scheduling": "Enable/Disable Scheduling",
+          "add_schedule": "Add New Schedule",
+          "edit_schedule": "View Existing Schedules",
+          "delete_schedule": "Delete Schedule"
+        }
+      },
+      "enable_scheduling": {
+        "title": "Enable Scheduling",
+        "description": "Turn time-based scheduling on or off",
+        "data": {
+          "enable_scheduling": "Enable time-based scheduling"
+        }
+      },
+      "add_schedule": {
+        "title": "Add New Schedule",
+        "description": "Create a new temperature schedule",
+        "data": {
+          "schedule_name": "Schedule Name (e.g., Sleep Mode, Work Hours)",
+          "schedule_days": "Days of Week",
+          "schedule_start_time": "Start Time",
+          "schedule_end_time": "End Time (can cross midnight)",
+          "schedule_target_temp": "Target Temperature (°C)",
+          "schedule_enabled": "Schedule Enabled"
+        }
+      },
+      "edit_schedule": {
+        "title": "Existing Schedules",
+        "description": "{message}",
+        "data": {}
+      },
+      "delete_schedule": {
+        "title": "Delete Schedule",
+        "description": "{message}",
+        "data": {
+          "schedule_to_delete": "Schedule to Delete"
+        }
       }
     }
   }
