@@ -1105,7 +1105,7 @@ class WeatherAdjustmentSensor(AirconManagerSensorBase):
             "outdoor_temperature": outdoor_temp,
             "base_target": base_target,
             "effective_target": effective_target,
-            "adjustment_applied": self.native_value \!= 0.0 if self.native_value is not None else False,
+            "adjustment_applied": self.native_value != 0.0 if self.native_value is not None else False,
         }
 
 
