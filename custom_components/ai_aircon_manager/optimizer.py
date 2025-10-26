@@ -280,7 +280,7 @@ class AirconOptimizer:
             temp_state = self.hass.states.get(temp_sensor)
             current_temp = None
 
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Room %s: temp_sensor=%s, temp_state=%s, state_value=%s",
                 room_name,
                 temp_sensor,
@@ -294,7 +294,7 @@ class AirconOptimizer:
 
                     # Check and convert temperature unit if needed
                     unit = temp_state.attributes.get("unit_of_measurement", "°C")
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "Room %s: Successfully read temp=%.1f, unit=%s",
                         room_name,
                         current_temp,
@@ -403,6 +403,18 @@ class AirconOptimizer:
 
         except Exception as e:
             _LOGGER.error("Error getting AI recommendations: %s", e)
+            self._last_error = f"AI API Error: {e}"
+            self._error_count += 1
+
+            # Preserve last recommendations on error instead of returning empty dict
+            if self._last_recommendations:
+                _LOGGER.warning(
+                    "AI call failed, reusing last known recommendations (error count: %d)",
+                    self._error_count
+                )
+                return self._last_recommendations
+
+            _LOGGER.error("No previous recommendations available, returning empty recommendations")
             return {}
 
     def _build_optimization_prompt(

@@ -23,10 +23,11 @@ _LOGGER = logging.getLogger(__name__)
 class AirconManagerSensorBase(CoordinatorEntity, SensorEntity):
     """Base class for AI Aircon Manager sensors with device info."""
 
-    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+    def __init__(self, coordinator, config_entry: ConfigEntry, optimizer=None) -> None:
         """Initialize the base sensor."""
         super().__init__(coordinator)
         self._config_entry = config_entry
+        self._optimizer = optimizer
 
     @property
     def device_info(self):
@@ -60,7 +61,7 @@ async def async_setup_entry(
 
         # Temperature difference sensor
         try:
-            sensor = RoomTemperatureDifferenceSensor(coordinator, config_entry, room_name)
+            sensor = RoomTemperatureDifferenceSensor(coordinator, config_entry, room_name, optimizer)
             entities.append(sensor)
             _LOGGER.info("Created RoomTemperatureDifferenceSensor for %s", room_name)
         except Exception as e:
@@ -123,9 +124,9 @@ class RoomTemperatureDifferenceSensor(AirconManagerSensorBase):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
 
-    def __init__(self, coordinator, config_entry: ConfigEntry, room_name: str) -> None:
+    def __init__(self, coordinator, config_entry: ConfigEntry, room_name: str, optimizer=None) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, optimizer)
         self._room_name = room_name
         # Normalize room name for unique_id (replace spaces with underscores, lowercase)
         room_id = room_name.lower().replace(" ", "_")
@@ -160,12 +161,15 @@ class RoomTemperatureDifferenceSensor(AirconManagerSensorBase):
             return {}
 
         state = room_states[self._room_name]
+        # Use configured deadband instead of hardcoded 0.5
+        deadband = self._optimizer.temperature_deadband if self._optimizer else 0.5
         return {
             "current_temperature": state["current_temperature"],
             "target_temperature": state["target_temperature"],
+            "deadband": deadband,
             "status": (
-                "too_hot" if state["current_temperature"] and state["current_temperature"] > state["target_temperature"] + 0.5
-                else "too_cold" if state["current_temperature"] and state["current_temperature"] < state["target_temperature"] - 0.5
+                "too_hot" if state["current_temperature"] and state["current_temperature"] > state["target_temperature"] + deadband
+                else "too_cold" if state["current_temperature"] and state["current_temperature"] < state["target_temperature"] - deadband
                 else "at_target"
             ),
         }
