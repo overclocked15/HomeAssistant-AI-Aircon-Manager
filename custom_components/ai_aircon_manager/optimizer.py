@@ -460,10 +460,11 @@ Management strategy for HEATING MODE:
    - Medium deviation (1-3°C below): Set fan to 50-75% (moderate heating)
    - Small deviation (<1°C below): Set fan to 40-60% (gentle heating)
 
-2. ROOMS ABOVE TARGET (too warm - don't need heating):
-   - High deviation (3°C+ above): Set fan to 0-25% (minimal heating, let cool naturally)
-   - Medium deviation (1-3°C above): Set fan to 25-40% (reduce heating)
-   - Small deviation (<1°C above): Set fan to 40-50% (minimal heating)
+2. ROOMS ABOVE TARGET (too warm - OVERSHOT, don't need heating):
+   - CRITICAL: Any room above target is OVERSHOOTING - shut off the fan COMPLETELY
+   - High deviation (2°C+ above): Set fan to 0% (SHUT OFF - severe overshoot)
+   - Medium deviation (1-2°C above): Set fan to 0% (SHUT OFF - overshoot)
+   - Small deviation (<1°C above): Set fan to 0-10% (minimal/off - slight overshoot)
 
 3. ROOMS AT TARGET (within deadband):
    - Set fan to 50-70% (maintain equilibrium)
@@ -477,10 +478,11 @@ Management strategy for COOLING MODE:
    - Medium deviation (1-3°C above): Set fan to 50-75% (moderate cooling)
    - Small deviation (<1°C above): Set fan to 40-60% (gentle cooling)
 
-2. ROOMS BELOW TARGET (too cold - don't need cooling):
-   - High deviation (3°C+ below): Set fan to 0-25% (minimal cooling, let warm naturally)
-   - Medium deviation (1-3°C below): Set fan to 25-40% (reduce cooling)
-   - Small deviation (<1°C below): Set fan to 40-50% (minimal cooling)
+2. ROOMS BELOW TARGET (too cold - OVERSHOT, don't need cooling):
+   - CRITICAL: Any room below target is OVERSHOOTING - shut off the fan COMPLETELY
+   - High deviation (2°C+ below): Set fan to 0% (SHUT OFF - severe overshoot)
+   - Medium deviation (1-2°C below): Set fan to 0% (SHUT OFF - overshoot)
+   - Small deviation (<1°C below): Set fan to 0-10% (minimal/off - slight overshoot)
 
 3. ROOMS AT TARGET (within deadband):
    - Set fan to 50-70% (maintain equilibrium)
@@ -490,8 +492,10 @@ Management strategy for COOLING MODE:
 {strategy}
 
 Key principles:
+- **OVERSHOOT IS PRIORITY #1**: Rooms that have overshot (too cold in cooling, too warm in heating) MUST have fans shut off (0%) or very low (0-10%) to prevent wasted energy and discomfort
 - DIRECTION MATTERS: Consider whether room is above or below target, not just the magnitude
-- Make gradual adjustments (10-25% changes typically)
+- Be AGGRESSIVE with overshoot: If a room is below target in cooling mode or above target in heating mode, shut it down immediately
+- Make gradual adjustments (10-25% changes typically) for rooms that need HVAC, but be aggressive (0%) for overshooting rooms
 - Balance the system: redistribute airflow to equalize temperatures
 - Goal is whole-home temperature equilibrium at target
 - Deadband: rooms within ±{self.temperature_deadband}°C are acceptable
@@ -715,19 +719,20 @@ Where recommended_fan_speed is an integer between 0 and 100.
         # Check if we need aggressive HVAC action
         elif self.hvac_mode == "cool":
             # In cool mode: high fan only if temps are ABOVE target
-            if avg_temp_diff >= 3.0 or (max_temp_diff >= 3.0 and temp_variance >= 2.0):
+            if avg_temp_diff >= 2.5 or (max_temp_diff >= 3.0 and temp_variance >= 2.0):
                 fan_speed = "high"
                 _LOGGER.info(
                     "Main fan -> HIGH: Aggressive cooling needed (avg: +%.1f°C, max: +%.1f°C)",
                     avg_temp_diff,
                     max_temp_diff,
                 )
-            elif avg_temp_diff <= -1.0:
-                # Temps below target in cool mode - reduce cooling
+            elif avg_temp_diff <= -0.5 or (avg_temp_diff < 1.0 and max_temp_diff < 2.0):
+                # Temps below target OR close to target in cool mode - reduce cooling
                 fan_speed = "low"
                 _LOGGER.info(
-                    "Main fan -> LOW: Temps below target in cool mode (avg: %.1f°C)",
+                    "Main fan -> LOW: Temps at/below target in cool mode (avg: %.1f°C, max: +%.1f°C)",
                     avg_temp_diff,
+                    max_temp_diff,
                 )
             else:
                 fan_speed = "medium"
@@ -738,19 +743,20 @@ Where recommended_fan_speed is an integer between 0 and 100.
                 )
         elif self.hvac_mode == "heat":
             # In heat mode: high fan only if temps are BELOW target
-            if avg_temp_diff <= -3.0 or (min_temp_diff <= -3.0 and temp_variance >= 2.0):
+            if avg_temp_diff <= -2.5 or (min_temp_diff <= -3.0 and temp_variance >= 2.0):
                 fan_speed = "high"
                 _LOGGER.info(
                     "Main fan -> HIGH: Aggressive heating needed (avg: %.1f°C, min: %.1f°C)",
                     avg_temp_diff,
                     min_temp_diff,
                 )
-            elif avg_temp_diff >= 1.0:
-                # Temps above target in heat mode - reduce heating
+            elif avg_temp_diff >= 0.5 or (avg_temp_diff > -1.0 and min_temp_diff > -2.0):
+                # Temps above target OR close to target in heat mode - reduce heating
                 fan_speed = "low"
                 _LOGGER.info(
-                    "Main fan -> LOW: Temps above target in heat mode (avg: +%.1f°C)",
+                    "Main fan -> LOW: Temps at/above target in heat mode (avg: %.1f°C, min: %.1f°C)",
                     avg_temp_diff,
+                    min_temp_diff,
                 )
             else:
                 fan_speed = "medium"
