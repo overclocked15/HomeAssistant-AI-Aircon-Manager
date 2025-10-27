@@ -619,6 +619,14 @@ class AirconOptimizer:
         self, room_states: dict[str, dict[str, Any]]
     ) -> str:
         """Build the prompt for the AI."""
+        # Extract effective target from room_states (all rooms have same target)
+        # This will be the weather/schedule-adjusted target, not the base target
+        effective_target = self.target_temperature
+        if room_states:
+            first_room = next(iter(room_states.values()))
+            if 'target_temperature' in first_room and first_room['target_temperature'] is not None:
+                effective_target = first_room['target_temperature']
+
         if self.hvac_mode == "heat":
             system_type = "HEATING"
             prompt_mode_explanation = """
@@ -644,7 +652,7 @@ CRITICAL:
 
         prompt = f"""You are an intelligent HVAC management system. I have a central HVAC system in {system_type} mode with individual zone fan speed controls for each room.
 
-Target temperature for all rooms: {self.target_temperature}°C
+Target temperature for all rooms: {effective_target}°C
 Temperature deadband: {self.temperature_deadband}°C (rooms within this range are considered at target)
 
 {prompt_mode_explanation}
@@ -652,12 +660,12 @@ Temperature deadband: {self.temperature_deadband}°C (rooms within this range ar
 Current room states:
 """
         for room_name, state in room_states.items():
-            temp_diff = state['current_temperature'] - self.target_temperature if state['current_temperature'] is not None else 0
+            temp_diff = state['current_temperature'] - effective_target if state['current_temperature'] is not None else 0
             temp_status = "AT TARGET" if abs(temp_diff) <= self.temperature_deadband else ("TOO HOT" if temp_diff > 0 else "TOO COLD")
 
             prompt += f"""
 Room: {room_name}
-  - Current temperature: {state['current_temperature']}°C (Target: {self.target_temperature}°C, Difference: {temp_diff:+.1f}°C, Status: {temp_status})
+  - Current temperature: {state['current_temperature']}°C (Target: {effective_target}°C, Difference: {temp_diff:+.1f}°C, Status: {temp_status})
   - Current zone fan speed: {state['cover_position']}% (0% = off, 100% = full speed)
 """
 
