@@ -23,6 +23,12 @@ from .const import (
     CONF_AI_MODEL,
     DEFAULT_CLAUDE_MODEL,
     DEFAULT_CHATGPT_MODEL,
+    DEFAULT_MAIN_FAN_HIGH_THRESHOLD,
+    DEFAULT_MAIN_FAN_MEDIUM_THRESHOLD,
+    DEFAULT_WEATHER_INFLUENCE_FACTOR,
+    DEFAULT_OVERSHOOT_TIER1_THRESHOLD,
+    DEFAULT_OVERSHOOT_TIER2_THRESHOLD,
+    DEFAULT_OVERSHOOT_TIER3_THRESHOLD,
 )
 from .optimizer import AirconOptimizer
 
@@ -74,6 +80,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         outdoor_temp_sensor=entry.data.get("outdoor_temp_sensor"),
         enable_scheduling=entry.data.get("enable_scheduling", False),
         schedules=entry.data.get("schedules", []),
+        main_fan_high_threshold=entry.data.get("main_fan_high_threshold", DEFAULT_MAIN_FAN_HIGH_THRESHOLD),
+        main_fan_medium_threshold=entry.data.get("main_fan_medium_threshold", DEFAULT_MAIN_FAN_MEDIUM_THRESHOLD),
+        weather_influence_factor=entry.data.get("weather_influence_factor", DEFAULT_WEATHER_INFLUENCE_FACTOR),
+        overshoot_tier1_threshold=entry.data.get("overshoot_tier1_threshold", DEFAULT_OVERSHOOT_TIER1_THRESHOLD),
+        overshoot_tier2_threshold=entry.data.get("overshoot_tier2_threshold", DEFAULT_OVERSHOOT_TIER2_THRESHOLD),
+        overshoot_tier3_threshold=entry.data.get("overshoot_tier3_threshold", DEFAULT_OVERSHOOT_TIER3_THRESHOLD),
     )
 
     # Get update interval from config (for AI optimization)
@@ -113,6 +125,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    # Cleanup optimizer resources
+    optimizer = hass.data[DOMAIN][entry.entry_id]["optimizer"]
+    await optimizer.async_cleanup()
+
+    # Unload platforms
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
 

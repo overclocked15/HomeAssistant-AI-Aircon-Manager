@@ -37,6 +37,12 @@ class AirconOptimizer:
         outdoor_temp_sensor: str | None = None,
         enable_scheduling: bool = False,
         schedules: list[dict[str, Any]] | None = None,
+        main_fan_high_threshold: float = 2.5,
+        main_fan_medium_threshold: float = 1.0,
+        weather_influence_factor: float = 0.5,
+        overshoot_tier1_threshold: float = 1.0,
+        overshoot_tier2_threshold: float = 2.0,
+        overshoot_tier3_threshold: float = 3.0,
     ) -> None:
         """Initialize the optimizer."""
         self.hass = hass
@@ -61,6 +67,12 @@ class AirconOptimizer:
         self.outdoor_temp_sensor = outdoor_temp_sensor
         self.enable_scheduling = enable_scheduling
         self.schedules = schedules or []
+        self.main_fan_high_threshold = main_fan_high_threshold
+        self.main_fan_medium_threshold = main_fan_medium_threshold
+        self.weather_influence_factor = weather_influence_factor
+        self.overshoot_tier1_threshold = overshoot_tier1_threshold
+        self.overshoot_tier2_threshold = overshoot_tier2_threshold
+        self.overshoot_tier3_threshold = overshoot_tier3_threshold
         self._ai_client = None
         self._last_ai_response = None
         self._last_error = None
@@ -201,23 +213,21 @@ class AirconOptimizer:
         - If it's mild outside (20-25°C), keep target as-is
         - If it's cold outside (<15°C), set AC slightly warmer to prevent overcooling
         """
-        from .const import WEATHER_TEMP_INFLUENCE
-
         if outdoor_temp > 30:
             # Very hot outside - set AC 0.5°C cooler
-            adjustment = -0.5 * WEATHER_TEMP_INFLUENCE
+            adjustment = -0.5 * self.weather_influence_factor
             _LOGGER.debug("Hot weather (%.1f°C) - adjusting target by %.1f°C", outdoor_temp, adjustment)
         elif outdoor_temp > 25:
             # Warm outside - set AC 0.25°C cooler
-            adjustment = -0.25 * WEATHER_TEMP_INFLUENCE
+            adjustment = -0.25 * self.weather_influence_factor
             _LOGGER.debug("Warm weather (%.1f°C) - adjusting target by %.1f°C", outdoor_temp, adjustment)
         elif outdoor_temp < 15:
             # Cold outside - set AC 0.5°C warmer to prevent overcooling
-            adjustment = 0.5 * WEATHER_TEMP_INFLUENCE
+            adjustment = 0.5 * self.weather_influence_factor
             _LOGGER.debug("Cold weather (%.1f°C) - adjusting target by %.1f°C", outdoor_temp, adjustment)
         elif outdoor_temp < 20:
             # Cool outside - set AC 0.25°C warmer
-            adjustment = 0.25 * WEATHER_TEMP_INFLUENCE
+            adjustment = 0.25 * self.weather_influence_factor
             _LOGGER.debug("Cool weather (%.1f°C) - adjusting target by %.1f°C", outdoor_temp, adjustment)
         else:
             # Mild weather - no adjustment needed
@@ -662,10 +672,10 @@ Management strategy for HEATING MODE:
 
 2. ROOMS ABOVE TARGET (too warm - OVERSHOT, don't need heating):
    - CRITICAL: Room has overshot target - minimize heating but maintain airflow for circulation
-   - Severe overshoot (3°C+ above): Set fan to 0-5% (shutdown - extreme overshoot)
-   - High overshoot (2-3°C above): Set fan to 5-15% (minimal airflow - severe overshoot)
-   - Medium overshoot (1-2°C above): Set fan to 15-25% (reduced heating - moderate overshoot)
-   - Small overshoot (<1°C above): Set fan to 25-35% (gentle reduction - slight overshoot)
+   - Severe overshoot ({self.overshoot_tier3_threshold}°C+ above): Set fan to 0-5% (shutdown - extreme overshoot)
+   - High overshoot ({self.overshoot_tier2_threshold}-{self.overshoot_tier3_threshold}°C above): Set fan to 5-15% (minimal airflow - severe overshoot)
+   - Medium overshoot ({self.overshoot_tier1_threshold}-{self.overshoot_tier2_threshold}°C above): Set fan to 15-25% (reduced heating - moderate overshoot)
+   - Small overshoot (<{self.overshoot_tier1_threshold}°C above): Set fan to 25-35% (gentle reduction - slight overshoot)
 
 3. ROOMS AT TARGET (within deadband):
    - Set fan to 50-70% (maintain equilibrium with good circulation)
@@ -681,10 +691,10 @@ Management strategy for COOLING MODE:
 
 2. ROOMS BELOW TARGET (too cold - OVERSHOT, don't need cooling):
    - CRITICAL: Room has overshot target - minimize cooling but maintain airflow for circulation
-   - Severe overshoot (3°C+ below): Set fan to 0-5% (shutdown - extreme overshoot)
-   - High overshoot (2-3°C below): Set fan to 5-15% (minimal airflow - severe overshoot)
-   - Medium overshoot (1-2°C below): Set fan to 15-25% (reduced cooling - moderate overshoot)
-   - Small overshoot (<1°C below): Set fan to 25-35% (gentle reduction - slight overshoot)
+   - Severe overshoot ({self.overshoot_tier3_threshold}°C+ below): Set fan to 0-5% (shutdown - extreme overshoot)
+   - High overshoot ({self.overshoot_tier2_threshold}-{self.overshoot_tier3_threshold}°C below): Set fan to 5-15% (minimal airflow - severe overshoot)
+   - Medium overshoot ({self.overshoot_tier1_threshold}-{self.overshoot_tier2_threshold}°C below): Set fan to 15-25% (reduced cooling - moderate overshoot)
+   - Small overshoot (<{self.overshoot_tier1_threshold}°C below): Set fan to 25-35% (gentle reduction - slight overshoot)
 
 3. ROOMS AT TARGET (within deadband):
    - Set fan to 50-70% (maintain equilibrium with good circulation)
@@ -695,7 +705,7 @@ Management strategy for COOLING MODE:
 
 Key principles:
 - **OVERSHOOT HANDLING IS CRITICAL**: Rooms that have overshot target need progressive reduction based on severity
-- **Maintain Air Circulation**: Keep some airflow (5-35%) for most overshoot scenarios - complete shutdown (0-5%) only for extreme cases (3°C+)
+- **Maintain Air Circulation**: Keep some airflow (5-35%) for most overshoot scenarios - complete shutdown (0-5%) only for extreme cases ({self.overshoot_tier3_threshold}°C+)
 - **Progressive Response**: The further a room overshoots, the lower the fan speed (but still maintain minimal airflow for air quality)
 - DIRECTION MATTERS: Consider whether room is above or below target, not just the magnitude
 - Make gradual adjustments (10-25% changes typically) for rooms that need HVAC
@@ -922,14 +932,14 @@ Where recommended_fan_speed is an integer between 0 and 100.
         # Check if we need aggressive HVAC action
         elif self.hvac_mode == "cool":
             # In cool mode: high fan only if temps are ABOVE target
-            if avg_temp_diff >= 2.5 or (max_temp_diff >= 3.0 and temp_variance >= 2.0):
+            if avg_temp_diff >= self.main_fan_high_threshold or (max_temp_diff >= 3.0 and temp_variance >= 2.0):
                 fan_speed = "high"
                 _LOGGER.info(
                     "Main fan -> HIGH: Aggressive cooling needed (avg: +%.1f°C, max: +%.1f°C)",
                     avg_temp_diff,
                     max_temp_diff,
                 )
-            elif avg_temp_diff <= -0.5 or (avg_temp_diff < 1.0 and max_temp_diff < 2.0):
+            elif avg_temp_diff <= -0.5 or (avg_temp_diff < self.main_fan_medium_threshold and max_temp_diff < 2.0):
                 # Temps below target OR close to target in cool mode - reduce cooling
                 fan_speed = "low"
                 _LOGGER.info(
@@ -946,14 +956,14 @@ Where recommended_fan_speed is an integer between 0 and 100.
                 )
         elif self.hvac_mode == "heat":
             # In heat mode: high fan only if temps are BELOW target
-            if avg_temp_diff <= -2.5 or (min_temp_diff <= -3.0 and temp_variance >= 2.0):
+            if avg_temp_diff <= -self.main_fan_high_threshold or (min_temp_diff <= -3.0 and temp_variance >= 2.0):
                 fan_speed = "high"
                 _LOGGER.info(
                     "Main fan -> HIGH: Aggressive heating needed (avg: %.1f°C, min: %.1f°C)",
                     avg_temp_diff,
                     min_temp_diff,
                 )
-            elif avg_temp_diff >= 0.5 or (avg_temp_diff > -1.0 and min_temp_diff > -2.0):
+            elif avg_temp_diff >= 0.5 or (avg_temp_diff > -self.main_fan_medium_threshold and min_temp_diff > -2.0):
                 # Temps above target OR close to target in heat mode - reduce heating
                 fan_speed = "low"
                 _LOGGER.info(
@@ -1266,3 +1276,23 @@ Where recommended_fan_speed is an integer between 0 and 100.
             )
         except Exception as e:
             _LOGGER.error("Error sending notification: %s", e)
+
+    async def async_cleanup(self) -> None:
+        """Cleanup resources on unload."""
+        _LOGGER.debug("Cleaning up AirconOptimizer resources")
+
+        # Close AI client connections if they support it
+        if hasattr(self, "_ai_client") and self._ai_client is not None:
+            try:
+                # Both anthropic and openai clients have close methods
+                if hasattr(self._ai_client, "close"):
+                    await self._ai_client.close()
+                    _LOGGER.debug("Closed AI client connection")
+            except Exception as e:
+                _LOGGER.error("Error closing AI client: %s", e)
+
+        # Clear sensitive data from memory
+        self.api_key = None
+        self._ai_client = None
+
+        _LOGGER.info("AirconOptimizer cleanup completed")

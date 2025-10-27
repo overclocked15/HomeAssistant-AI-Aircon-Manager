@@ -93,52 +93,124 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._data: dict[str, Any] = {}
         self._rooms: list[dict[str, Any]] = []
 
+    async def _validate_api_key(self, ai_provider: str, api_key: str) -> dict[str, str] | None:
+        """Validate the API key by making a test call."""
+        try:
+            if ai_provider == "claude":
+                import anthropic
+                client = anthropic.Anthropic(api_key=api_key)
+                # Test with a minimal call
+                client.messages.create(
+                    model="claude-3-5-haiku-20241022",
+                    max_tokens=10,
+                    messages=[{"role": "user", "content": "test"}]
+                )
+            elif ai_provider == "chatgpt":
+                import openai
+                client = openai.OpenAI(api_key=api_key)
+                # Test with a minimal call
+                client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    max_tokens=10,
+                    messages=[{"role": "user", "content": "test"}]
+                )
+            return None
+        except Exception as e:
+            _LOGGER.error("API key validation failed: %s", e)
+            error_str = str(e).lower()
+            if "401" in error_str or "unauthorized" in error_str or "authentication" in error_str or "api key" in error_str:
+                return {"base": "invalid_auth"}
+            return {"base": "cannot_connect"}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle the initial step."""
-        if user_input is None:
-            return self.async_show_form(
-                step_id="user", data_schema=STEP_USER_DATA_SCHEMA
+        errors = {}
+
+        if user_input is not None:
+            # Validate API key
+            validation_error = await self._validate_api_key(
+                user_input[CONF_AI_PROVIDER],
+                user_input[CONF_API_KEY]
             )
 
-        self._data = user_input
+            if validation_error:
+                errors = validation_error
+            else:
+                self._data = user_input
+                return await self.async_step_add_room()
 
-        return await self.async_step_add_room()
+        return self.async_show_form(
+            step_id="user",
+            data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors
+        )
+
+    def _validate_entities(self, temp_sensor: str, cover_entity: str) -> dict[str, str] | None:
+        """Validate that entities exist and are available."""
+        errors = {}
+
+        # Check temperature sensor
+        temp_state = self.hass.states.get(temp_sensor)
+        if not temp_state:
+            errors["temperature_sensor"] = "entity_not_found"
+        elif temp_state.state in ["unavailable", "unknown"]:
+            errors["temperature_sensor"] = "entity_unavailable"
+
+        # Check cover entity
+        cover_state = self.hass.states.get(cover_entity)
+        if not cover_state:
+            errors["cover_entity"] = "entity_not_found"
+        elif cover_state.state in ["unavailable", "unknown"]:
+            errors["cover_entity"] = "entity_unavailable"
+
+        return errors if errors else None
 
     async def async_step_add_room(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Handle adding room configuration."""
+        errors = {}
+
         if user_input is not None:
-            # Add the current room to the list
-            self._rooms.append(
-                {
-                    CONF_ROOM_NAME: user_input[CONF_ROOM_NAME],
-                    CONF_TEMPERATURE_SENSOR: user_input[CONF_TEMPERATURE_SENSOR],
-                    CONF_COVER_ENTITY: user_input[CONF_COVER_ENTITY],
-                }
+            # Validate entities
+            validation_errors = self._validate_entities(
+                user_input[CONF_TEMPERATURE_SENSOR],
+                user_input[CONF_COVER_ENTITY]
             )
 
-            # Check if user wants to add another room
-            if user_input.get("add_another"):
-                return await self.async_step_add_room()
+            if validation_errors:
+                errors = validation_errors
             else:
-                # Done adding rooms
-                if len(self._rooms) == 0:
-                    return self.async_show_form(
-                        step_id="add_room",
-                        data_schema=self._get_room_schema(),
-                        description_placeholders={
-                            "rooms_added": str(len(self._rooms)),
-                        },
-                        errors={"base": "no_rooms"},
-                    )
-
-                self._data[CONF_ROOM_CONFIGS] = self._rooms
-                return self.async_create_entry(
-                    title="AI Aircon Manager", data=self._data
+                # Add the current room to the list
+                self._rooms.append(
+                    {
+                        CONF_ROOM_NAME: user_input[CONF_ROOM_NAME],
+                        CONF_TEMPERATURE_SENSOR: user_input[CONF_TEMPERATURE_SENSOR],
+                        CONF_COVER_ENTITY: user_input[CONF_COVER_ENTITY],
+                    }
                 )
+
+                # Check if user wants to add another room
+                if user_input.get("add_another"):
+                    return await self.async_step_add_room()
+                else:
+                    # Done adding rooms
+                    if len(self._rooms) == 0:
+                        return self.async_show_form(
+                            step_id="add_room",
+                            data_schema=self._get_room_schema(),
+                            description_placeholders={
+                                "rooms_added": str(len(self._rooms)),
+                            },
+                            errors={"base": "no_rooms"},
+                        )
+
+                    self._data[CONF_ROOM_CONFIGS] = self._rooms
+                    return self.async_create_entry(
+                        title="AI Aircon Manager", data=self._data
+                    )
 
         return self.async_show_form(
             step_id="add_room",
@@ -146,6 +218,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "rooms_added": str(len(self._rooms)),
             },
+            errors=errors,
         )
 
     def _get_room_schema(self) -> vol.Schema:
@@ -338,31 +411,62 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             },
         )
 
+    def _validate_entities(self, temp_sensor: str, cover_entity: str) -> dict[str, str] | None:
+        """Validate that entities exist and are available."""
+        errors = {}
+
+        # Check temperature sensor
+        temp_state = self.hass.states.get(temp_sensor)
+        if not temp_state:
+            errors["temperature_sensor"] = "entity_not_found"
+        elif temp_state.state in ["unavailable", "unknown"]:
+            errors["temperature_sensor"] = "entity_unavailable"
+
+        # Check cover entity
+        cover_state = self.hass.states.get(cover_entity)
+        if not cover_state:
+            errors["cover_entity"] = "entity_not_found"
+        elif cover_state.state in ["unavailable", "unknown"]:
+            errors["cover_entity"] = "entity_unavailable"
+
+        return errors if errors else None
+
     async def async_step_add_room(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Add a new room."""
+        errors = {}
+
         if user_input is not None:
-            # Add the room
-            new_room = {
-                CONF_ROOM_NAME: user_input[CONF_ROOM_NAME],
-                CONF_TEMPERATURE_SENSOR: user_input[CONF_TEMPERATURE_SENSOR],
-                CONF_COVER_ENTITY: user_input[CONF_COVER_ENTITY],
-            }
-
-            current_rooms = list(self.config_entry.data.get(CONF_ROOM_CONFIGS, []))
-            current_rooms.append(new_room)
-
-            # Update the config entry
-            new_data = {**self.config_entry.data, CONF_ROOM_CONFIGS: current_rooms}
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, data=new_data
+            # Validate entities
+            validation_errors = self._validate_entities(
+                user_input[CONF_TEMPERATURE_SENSOR],
+                user_input[CONF_COVER_ENTITY]
             )
 
-            # Reload the integration
-            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            if validation_errors:
+                errors = validation_errors
+            else:
+                # Add the room
+                new_room = {
+                    CONF_ROOM_NAME: user_input[CONF_ROOM_NAME],
+                    CONF_TEMPERATURE_SENSOR: user_input[CONF_TEMPERATURE_SENSOR],
+                    CONF_COVER_ENTITY: user_input[CONF_COVER_ENTITY],
+                }
 
-            return await self.async_step_manage_rooms()
+                current_rooms = list(self.config_entry.data.get(CONF_ROOM_CONFIGS, []))
+                current_rooms.append(new_room)
+
+                # Update the config entry
+                new_data = {**self.config_entry.data, CONF_ROOM_CONFIGS: current_rooms}
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data=new_data
+                )
+
+                # Reload the integration
+                await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+                return await self.async_step_manage_rooms()
 
         return self.async_show_form(
             step_id="add_room",
@@ -377,6 +481,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                 }
             ),
+            errors=errors,
         )
 
     async def async_step_remove_room(

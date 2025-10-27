@@ -37,6 +37,14 @@ CONF_SCHEDULE_END_TIME = "schedule_end_time"
 CONF_SCHEDULE_TARGET_TEMP = "schedule_target_temp"
 CONF_SCHEDULE_ENABLED = "schedule_enabled"
 
+# Advanced settings - magic numbers
+CONF_MAIN_FAN_HIGH_THRESHOLD = "main_fan_high_threshold"
+CONF_MAIN_FAN_MEDIUM_THRESHOLD = "main_fan_medium_threshold"
+CONF_WEATHER_INFLUENCE_FACTOR = "weather_influence_factor"
+CONF_OVERSHOOT_TIER1_THRESHOLD = "overshoot_tier1_threshold"
+CONF_OVERSHOOT_TIER2_THRESHOLD = "overshoot_tier2_threshold"
+CONF_OVERSHOOT_TIER3_THRESHOLD = "overshoot_tier3_threshold"
+
 # AI Providers
 AI_PROVIDER_CLAUDE = "claude"
 AI_PROVIDER_CHATGPT = "chatgpt"
@@ -79,6 +87,14 @@ DEFAULT_ENABLE_SCHEDULING = False
 # Weather adjustment parameters
 WEATHER_TEMP_INFLUENCE = 0.5  # How much outdoor temp influences AC setpoint (0.0-1.0)
 WEATHER_FORECAST_HOURS = 2  # How many hours ahead to consider
+
+# Advanced settings defaults
+DEFAULT_MAIN_FAN_HIGH_THRESHOLD = 2.5  # degrees C above target for HIGH fan speed
+DEFAULT_MAIN_FAN_MEDIUM_THRESHOLD = 1.0  # degrees C above target for MEDIUM fan speed
+DEFAULT_WEATHER_INFLUENCE_FACTOR = 0.5  # How much outdoor temp influences target (0.0-1.0)
+DEFAULT_OVERSHOOT_TIER1_THRESHOLD = 1.0  # degrees C overshoot for tier 1 (25-35%)
+DEFAULT_OVERSHOOT_TIER2_THRESHOLD = 2.0  # degrees C overshoot for tier 2 (15-25%)
+DEFAULT_OVERSHOOT_TIER3_THRESHOLD = 3.0  # degrees C overshoot for tier 3 (0-5%)
 
 # Days of week for scheduling
 SCHEDULE_DAYS_OPTIONS = [
