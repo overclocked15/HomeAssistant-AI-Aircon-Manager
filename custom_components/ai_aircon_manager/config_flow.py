@@ -594,28 +594,39 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
             return self.async_create_entry(title="", data={})
 
+        # Build schema with proper defaults (avoid None values in entity selectors)
+        schema_dict = {
+            vol.Optional(
+                CONF_ENABLE_WEATHER_ADJUSTMENT,
+                default=self.config_entry.data.get(CONF_ENABLE_WEATHER_ADJUSTMENT, False),
+            ): cv.boolean,
+        }
+
+        # Only set default if weather entity exists
+        weather_entity = self.config_entry.data.get(CONF_WEATHER_ENTITY)
+        if weather_entity:
+            schema_dict[vol.Optional(CONF_WEATHER_ENTITY, default=weather_entity)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="weather")
+            )
+        else:
+            schema_dict[vol.Optional(CONF_WEATHER_ENTITY)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="weather")
+            )
+
+        # Only set default if outdoor temp sensor exists
+        outdoor_sensor = self.config_entry.data.get(CONF_OUTDOOR_TEMP_SENSOR)
+        if outdoor_sensor:
+            schema_dict[vol.Optional(CONF_OUTDOOR_TEMP_SENSOR, default=outdoor_sensor)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+            )
+        else:
+            schema_dict[vol.Optional(CONF_OUTDOOR_TEMP_SENSOR)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+            )
+
         return self.async_show_form(
             step_id="weather",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_ENABLE_WEATHER_ADJUSTMENT,
-                        default=self.config_entry.data.get(CONF_ENABLE_WEATHER_ADJUSTMENT, False),
-                    ): cv.boolean,
-                    vol.Optional(
-                        CONF_WEATHER_ENTITY,
-                        default=self.config_entry.data.get(CONF_WEATHER_ENTITY),
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="weather")
-                    ),
-                    vol.Optional(
-                        CONF_OUTDOOR_TEMP_SENSOR,
-                        default=self.config_entry.data.get(CONF_OUTDOOR_TEMP_SENSOR),
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
-                    ),
-                }
-            ),
+            data_schema=vol.Schema(schema_dict),
             description_placeholders={
                 "info": "Weather integration adjusts target temperature based on outdoor conditions. Provide either a weather entity or outdoor temperature sensor (or both for redundancy)."
             },
