@@ -661,13 +661,14 @@ Management strategy for HEATING MODE:
    - Small deviation (<1°C below): Set fan to 40-60% (gentle heating)
 
 2. ROOMS ABOVE TARGET (too warm - OVERSHOT, don't need heating):
-   - CRITICAL: Any room above target is OVERSHOOTING - shut off the fan COMPLETELY
-   - High deviation (2°C+ above): Set fan to 0% (SHUT OFF - severe overshoot)
-   - Medium deviation (1-2°C above): Set fan to 0% (SHUT OFF - overshoot)
-   - Small deviation (<1°C above): Set fan to 0-10% (minimal/off - slight overshoot)
+   - CRITICAL: Room has overshot target - minimize heating but maintain airflow for circulation
+   - Severe overshoot (3°C+ above): Set fan to 0-5% (shutdown - extreme overshoot)
+   - High overshoot (2-3°C above): Set fan to 5-15% (minimal airflow - severe overshoot)
+   - Medium overshoot (1-2°C above): Set fan to 15-25% (reduced heating - moderate overshoot)
+   - Small overshoot (<1°C above): Set fan to 25-35% (gentle reduction - slight overshoot)
 
 3. ROOMS AT TARGET (within deadband):
-   - Set fan to 50-70% (maintain equilibrium)
+   - Set fan to 50-70% (maintain equilibrium with good circulation)
 """
         else:  # cooling
             strategy = """
@@ -679,25 +680,27 @@ Management strategy for COOLING MODE:
    - Small deviation (<1°C above): Set fan to 40-60% (gentle cooling)
 
 2. ROOMS BELOW TARGET (too cold - OVERSHOT, don't need cooling):
-   - CRITICAL: Any room below target is OVERSHOOTING - shut off the fan COMPLETELY
-   - High deviation (2°C+ below): Set fan to 0% (SHUT OFF - severe overshoot)
-   - Medium deviation (1-2°C below): Set fan to 0% (SHUT OFF - overshoot)
-   - Small deviation (<1°C below): Set fan to 0-10% (minimal/off - slight overshoot)
+   - CRITICAL: Room has overshot target - minimize cooling but maintain airflow for circulation
+   - Severe overshoot (3°C+ below): Set fan to 0-5% (shutdown - extreme overshoot)
+   - High overshoot (2-3°C below): Set fan to 5-15% (minimal airflow - severe overshoot)
+   - Medium overshoot (1-2°C below): Set fan to 15-25% (reduced cooling - moderate overshoot)
+   - Small overshoot (<1°C below): Set fan to 25-35% (gentle reduction - slight overshoot)
 
 3. ROOMS AT TARGET (within deadband):
-   - Set fan to 50-70% (maintain equilibrium)
+   - Set fan to 50-70% (maintain equilibrium with good circulation)
 """
 
         prompt += f"""
 {strategy}
 
 Key principles:
-- **OVERSHOOT IS PRIORITY #1**: Rooms that have overshot (too cold in cooling, too warm in heating) MUST have fans shut off (0%) or very low (0-10%) to prevent wasted energy and discomfort
+- **OVERSHOOT HANDLING IS CRITICAL**: Rooms that have overshot target need progressive reduction based on severity
+- **Maintain Air Circulation**: Keep some airflow (5-35%) for most overshoot scenarios - complete shutdown (0-5%) only for extreme cases (3°C+)
+- **Progressive Response**: The further a room overshoots, the lower the fan speed (but still maintain minimal airflow for air quality)
 - DIRECTION MATTERS: Consider whether room is above or below target, not just the magnitude
-- Be AGGRESSIVE with overshoot: If a room is below target in cooling mode or above target in heating mode, shut it down immediately
-- Make gradual adjustments (10-25% changes typically) for rooms that need HVAC, but be aggressive (0%) for overshooting rooms
-- Balance the system: redistribute airflow to equalize temperatures
-- Goal is whole-home temperature equilibrium at target
+- Make gradual adjustments (10-25% changes typically) for rooms that need HVAC
+- Balance the system: redistribute airflow to equalize temperatures while maintaining circulation
+- Goal is whole-home temperature equilibrium at target with good air quality
 - Deadband: rooms within ±{self.temperature_deadband}°C are acceptable
 """
 

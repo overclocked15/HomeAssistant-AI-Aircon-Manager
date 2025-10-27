@@ -40,7 +40,11 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
   - Day-of-week scheduling (weekdays, weekends, specific days, or all days)
   - Time range support including cross-midnight schedules (e.g., 22:00-08:00)
   - Schedule priority over base target temperature
-- **Enhanced Overshoot Handling**: More aggressive fan shutoff for rooms that overshoot target
+- **Progressive Overshoot Handling**: Gradual fan reduction for rooms that overshoot target while maintaining air circulation
+  - Small overshoot (<1°C): Reduced to 25-35% for gentle correction
+  - Medium overshoot (1-2°C): Reduced to 15-25% for moderate correction
+  - High overshoot (2-3°C): Reduced to 5-15% for minimal airflow
+  - Severe overshoot (3°C+): Shutdown to 0-5% only in extreme cases
 - **Improved Main Fan Logic**: Smarter thresholds for low/medium/high fan speeds
 
 ## How It Works
