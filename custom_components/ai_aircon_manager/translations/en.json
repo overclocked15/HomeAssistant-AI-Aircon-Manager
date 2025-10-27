@@ -45,7 +45,8 @@
           "manage_rooms": "Manage Rooms (add/remove rooms)",
           "room_overrides": "Room Overrides (enable/disable AI control per room)",
           "weather": "Weather Integration (outdoor temperature adjustments)",
-          "schedules": "Time-Based Scheduling (different temps for different times)"
+          "schedules": "Time-Based Scheduling (different temps for different times)",
+          "advanced": "Advanced Settings (fine-tune thresholds and behavior)"
         }
       },
       "settings": {
@@ -140,6 +141,26 @@
         "description": "{message}",
         "data": {
           "schedule_to_delete": "Schedule to Delete"
+        }
+      },
+      "advanced": {
+        "title": "Advanced Settings",
+        "description": "Fine-tune system behavior with custom thresholds. Leave at defaults unless you know what you're doing!",
+        "data": {
+          "main_fan_high_threshold": "Main Fan HIGH Threshold - Temp above target for HIGH speed",
+          "main_fan_medium_threshold": "Main Fan MEDIUM Threshold - Temp above target for MEDIUM speed",
+          "weather_influence_factor": "Weather Influence Factor - How much outdoor temp affects target (0=none, 1=full)",
+          "overshoot_tier1_threshold": "Overshoot Tier 1 - Small overshoot threshold (25-35% fan)",
+          "overshoot_tier2_threshold": "Overshoot Tier 2 - Medium overshoot threshold (15-25% fan)",
+          "overshoot_tier3_threshold": "Overshoot Tier 3 - Severe overshoot threshold (0-5% fan)"
+        },
+        "data_description": {
+          "main_fan_high_threshold": "When average temperature deviation exceeds this value, main fan switches to HIGH. Default: 2.5°C",
+          "main_fan_medium_threshold": "When average temperature deviation exceeds this value, main fan switches to MEDIUM. Default: 1.0°C",
+          "weather_influence_factor": "Multiplier for weather-based adjustments. 0.0 = no weather influence, 1.0 = full influence. Default: 0.5",
+          "overshoot_tier1_threshold": "Rooms overshooting by less than this get 25-35% fan (gentle reduction). Default: 1.0°C",
+          "overshoot_tier2_threshold": "Rooms overshooting between tier1 and this get 15-25% fan (moderate reduction). Default: 2.0°C",
+          "overshoot_tier3_threshold": "Rooms overshooting more than this get 0-5% fan (shutdown). Default: 3.0°C"
         }
       }
     }

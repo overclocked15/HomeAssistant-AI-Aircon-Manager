@@ -259,7 +259,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options - show menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["settings", "manage_rooms", "room_overrides", "weather", "schedules"],
+            menu_options=["settings", "manage_rooms", "room_overrides", "weather", "schedules", "advanced"],
         )
 
     async def async_step_settings(
@@ -767,6 +767,126 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         selector.SelectSelectorConfig(
                             options=schedule_options,
                             mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_advanced(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle advanced settings configuration."""
+        if user_input is not None:
+            # Merge with existing data and update the config entry
+            new_data = {**self.config_entry.data, **user_input}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            # Reload the integration to apply changes
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        from .const import (
+            CONF_MAIN_FAN_HIGH_THRESHOLD,
+            CONF_MAIN_FAN_MEDIUM_THRESHOLD,
+            CONF_WEATHER_INFLUENCE_FACTOR,
+            CONF_OVERSHOOT_TIER1_THRESHOLD,
+            CONF_OVERSHOOT_TIER2_THRESHOLD,
+            CONF_OVERSHOOT_TIER3_THRESHOLD,
+            DEFAULT_MAIN_FAN_HIGH_THRESHOLD,
+            DEFAULT_MAIN_FAN_MEDIUM_THRESHOLD,
+            DEFAULT_WEATHER_INFLUENCE_FACTOR,
+            DEFAULT_OVERSHOOT_TIER1_THRESHOLD,
+            DEFAULT_OVERSHOOT_TIER2_THRESHOLD,
+            DEFAULT_OVERSHOOT_TIER3_THRESHOLD,
+        )
+
+        return self.async_show_form(
+            step_id="advanced",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_MAIN_FAN_HIGH_THRESHOLD,
+                        default=self.config_entry.data.get(
+                            CONF_MAIN_FAN_HIGH_THRESHOLD, DEFAULT_MAIN_FAN_HIGH_THRESHOLD
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.5,
+                            max=5.0,
+                            step=0.5,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_MAIN_FAN_MEDIUM_THRESHOLD,
+                        default=self.config_entry.data.get(
+                            CONF_MAIN_FAN_MEDIUM_THRESHOLD, DEFAULT_MAIN_FAN_MEDIUM_THRESHOLD
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.5,
+                            max=3.0,
+                            step=0.5,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_WEATHER_INFLUENCE_FACTOR,
+                        default=self.config_entry.data.get(
+                            CONF_WEATHER_INFLUENCE_FACTOR, DEFAULT_WEATHER_INFLUENCE_FACTOR
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.0,
+                            max=1.0,
+                            step=0.1,
+                            mode=selector.NumberSelectorMode.SLIDER,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_OVERSHOOT_TIER1_THRESHOLD,
+                        default=self.config_entry.data.get(
+                            CONF_OVERSHOOT_TIER1_THRESHOLD, DEFAULT_OVERSHOOT_TIER1_THRESHOLD
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.5,
+                            max=2.0,
+                            step=0.5,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_OVERSHOOT_TIER2_THRESHOLD,
+                        default=self.config_entry.data.get(
+                            CONF_OVERSHOOT_TIER2_THRESHOLD, DEFAULT_OVERSHOOT_TIER2_THRESHOLD
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1.0,
+                            max=3.0,
+                            step=0.5,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_OVERSHOOT_TIER3_THRESHOLD,
+                        default=self.config_entry.data.get(
+                            CONF_OVERSHOOT_TIER3_THRESHOLD, DEFAULT_OVERSHOOT_TIER3_THRESHOLD
+                        ),
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=2.0,
+                            max=5.0,
+                            step=0.5,
+                            unit_of_measurement="°C",
+                            mode=selector.NumberSelectorMode.BOX,
                         )
                     ),
                 }

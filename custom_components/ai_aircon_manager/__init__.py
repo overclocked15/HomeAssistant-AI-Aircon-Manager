@@ -120,6 +120,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Setup platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Register reload service
+    async def async_reload_service(call):
+        """Handle reload service call."""
+        _LOGGER.info("Reloading AI Aircon Manager integration")
+        await hass.config_entries.async_reload(entry.entry_id)
+
+    # Only register service once (for first entry)
+    if not hass.services.has_service(DOMAIN, "reload"):
+        hass.services.async_register(DOMAIN, "reload", async_reload_service)
+        _LOGGER.debug("Registered reload service")
+
     return True
 
 
@@ -132,5 +143,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Unload platforms
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id)
+
+        # Unregister reload service if this was the last entry
+        if not hass.data[DOMAIN]:
+            hass.services.async_remove(DOMAIN, "reload")
+            _LOGGER.debug("Unregistered reload service")
 
     return unload_ok
