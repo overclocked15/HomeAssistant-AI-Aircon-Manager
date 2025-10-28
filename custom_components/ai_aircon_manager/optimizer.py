@@ -897,6 +897,13 @@ Where recommended_fan_speed is an integer between 0 and 100.
         self, room_states: dict[str, dict[str, Any]]
     ) -> str:
         """Determine and set the main aircon fan speed based on system state."""
+        # Extract effective target from room_states (weather/schedule-adjusted)
+        effective_target = self.target_temperature
+        if room_states:
+            first_room = next(iter(room_states.values()))
+            if 'target_temperature' in first_room and first_room['target_temperature'] is not None:
+                effective_target = first_room['target_temperature']
+
         # Calculate temperature variance and average deviation from target
         temps = [
             state["current_temperature"]
@@ -913,10 +920,10 @@ Where recommended_fan_speed is an integer between 0 and 100.
         temp_variance = max_temp - min_temp
 
         # Calculate average deviation from target (with direction)
-        avg_temp_diff = avg_temp - self.target_temperature  # Positive = too hot, Negative = too cold
+        avg_temp_diff = avg_temp - effective_target  # Positive = too hot, Negative = too cold
         avg_deviation = abs(avg_temp_diff)
-        max_temp_diff = max(temp - self.target_temperature for temp in temps)
-        min_temp_diff = min(temp - self.target_temperature for temp in temps)
+        max_temp_diff = max(temp - effective_target for temp in temps)
+        min_temp_diff = min(temp - effective_target for temp in temps)
         max_deviation = max(abs(max_temp_diff), abs(min_temp_diff))
 
         # Determine fan speed based on conditions and HVAC mode
@@ -1085,6 +1092,13 @@ Where recommended_fan_speed is an integer between 0 and 100.
 
         This creates a "comfort zone" where AC stays in its current state.
         """
+        # Extract effective target from room_states (weather/schedule-adjusted)
+        effective_target = self.target_temperature
+        if room_states:
+            first_room = next(iter(room_states.values()))
+            if 'target_temperature' in first_room and first_room['target_temperature'] is not None:
+                effective_target = first_room['target_temperature']
+
         temps = [
             state["current_temperature"]
             for state in room_states.values()
@@ -1095,7 +1109,7 @@ Where recommended_fan_speed is an integer between 0 and 100.
             return False
 
         avg_temp = sum(temps) / len(temps)
-        temp_diff = avg_temp - self.target_temperature
+        temp_diff = avg_temp - effective_target
 
         # For cooling mode with hysteresis
         if self.hvac_mode == "cool":
@@ -1104,7 +1118,7 @@ Where recommended_fan_speed is an integer between 0 and 100.
                 # AND no rooms are above target (all rooms have cooled down)
                 max_temp = max(temps)
                 turn_off = (temp_diff <= -self.ac_turn_off_threshold and
-                           max_temp <= self.target_temperature)
+                           max_temp <= effective_target)
                 if turn_off:
                     _LOGGER.info(
                         "AC turn OFF check: avg=%.1f°C (%.1f°C below target), max=%.1f°C, "
@@ -1142,7 +1156,7 @@ Where recommended_fan_speed is an integer between 0 and 100.
                 # AND no rooms are below target (all rooms have warmed up)
                 min_temp = min(temps)
                 turn_off = (temp_diff >= self.ac_turn_off_threshold and
-                           min_temp >= self.target_temperature)
+                           min_temp >= effective_target)
                 if turn_off:
                     _LOGGER.info(
                         "AC turn OFF check: avg=%.1f°C (+%.1f°C above target), min=%.1f°C, "
