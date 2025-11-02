@@ -61,6 +61,7 @@
           "ai_model": "AI Model (Haiku/Mini recommended for cost savings)",
           "main_climate_entity": "Main Aircon Climate Entity (Optional - for monitoring/control)",
           "auto_control_main_ac": "Automatically turn main AC on/off based on need",
+          "use_fan_mode_for_circulation": "Use fan-only mode for air circulation (saves energy vs turning off)",
           "auto_control_ac_temperature": "Automatically control main AC temperature setpoint (fully automatic mode)",
           "main_fan_entity": "Main AC Fan Control (Optional - can be climate or fan entity)",
           "enable_notifications": "Enable notifications for important events"

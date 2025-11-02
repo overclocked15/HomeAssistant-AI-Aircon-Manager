@@ -16,6 +16,7 @@ from .const import (
     DEFAULT_TEMPERATURE_DEADBAND,
     DEFAULT_HVAC_MODE,
     DEFAULT_AUTO_CONTROL_MAIN_AC,
+    DEFAULT_USE_FAN_MODE_FOR_CIRCULATION,
     DEFAULT_AUTO_CONTROL_AC_TEMPERATURE,
     DEFAULT_ENABLE_NOTIFICATIONS,
     DEFAULT_AC_TURN_ON_THRESHOLD,
@@ -48,7 +49,7 @@ def get_device_info(config_entry: ConfigEntry) -> dict:
         "name": "AI Aircon Manager",
         "manufacturer": "AI Aircon Manager",
         "model": "AI-Powered HVAC Controller",
-        "sw_version": "1.11.2",
+        "sw_version": "1.12.0",
     }
 
 
@@ -72,6 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         temperature_deadband=entry.data.get("temperature_deadband", DEFAULT_TEMPERATURE_DEADBAND),
         hvac_mode=entry.data.get("hvac_mode", DEFAULT_HVAC_MODE),
         auto_control_main_ac=entry.data.get("auto_control_main_ac", DEFAULT_AUTO_CONTROL_MAIN_AC),
+        use_fan_mode_for_circulation=entry.data.get("use_fan_mode_for_circulation", DEFAULT_USE_FAN_MODE_FOR_CIRCULATION),
         auto_control_ac_temperature=entry.data.get("auto_control_ac_temperature", DEFAULT_AUTO_CONTROL_AC_TEMPERATURE),
         enable_notifications=entry.data.get("enable_notifications", DEFAULT_ENABLE_NOTIFICATIONS),
         room_overrides=entry.data.get("room_overrides", {}),

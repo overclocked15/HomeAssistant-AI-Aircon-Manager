@@ -17,6 +17,7 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_TEMPERATURE_DEADBAND = "temperature_deadband"
 CONF_HVAC_MODE = "hvac_mode"
 CONF_AUTO_CONTROL_MAIN_AC = "auto_control_main_ac"
+CONF_USE_FAN_MODE_FOR_CIRCULATION = "use_fan_mode_for_circulation"
 CONF_AUTO_CONTROL_AC_TEMPERATURE = "auto_control_ac_temperature"
 CONF_ENABLE_NOTIFICATIONS = "enable_notifications"
 CONF_ROOM_OVERRIDES = "room_overrides"
@@ -76,6 +77,7 @@ HVAC_MODE_COOL = "cool"
 HVAC_MODE_HEAT = "heat"
 HVAC_MODE_AUTO = "auto"
 HVAC_MODE_DRY = "dry"
+HVAC_MODE_FAN_ONLY = "fan_only"
 
 # Default values
 DEFAULT_TARGET_TEMPERATURE = 22
@@ -84,6 +86,7 @@ DEFAULT_DATA_POLL_INTERVAL = 30  # seconds - how often to poll sensor data
 DEFAULT_TEMPERATURE_DEADBAND = 0.5  # degrees C
 DEFAULT_HVAC_MODE = HVAC_MODE_COOL
 DEFAULT_AUTO_CONTROL_MAIN_AC = False
+DEFAULT_USE_FAN_MODE_FOR_CIRCULATION = False
 DEFAULT_AUTO_CONTROL_AC_TEMPERATURE = False
 DEFAULT_ENABLE_NOTIFICATIONS = True
 DEFAULT_STARTUP_DELAY = 120  # seconds (2 minutes) - prevents notifications during boot

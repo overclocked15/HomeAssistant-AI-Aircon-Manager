@@ -447,6 +447,31 @@ When enabled, the integration can automatically turn your main AC on/off:
 
 This hysteresis prevents rapid on/off cycling.
 
+#### Fan-Only Mode for Energy Savings (v1.12.0+)
+
+**Use fan mode instead of turning off completely** - saves energy while maintaining air circulation!
+
+When **"Use fan-only mode for air circulation"** is enabled:
+- **Rooms at target**: AC switches to fan-only mode instead of turning off
+- **Rooms overshooting**: AC switches to fan-only mode to help equalize temperatures through air circulation
+- **Compressor off**: Saves energy while maintaining comfort
+- **Better temperature distribution**: Fan circulation helps balance room temperatures
+
+**Benefits:**
+- **Lower energy costs**: Fan uses ~95% less power than compressor
+- **Better comfort**: Continuous air circulation prevents hot/cold spots
+- **Faster recovery**: Easier to resume cooling/heating from fan mode than from off
+- **Quieter operation**: Fan-only is quieter than compressor running
+
+**When it activates:**
+- All rooms are within target temperature range (deadband)
+- Some rooms are overshooting (cooler than target in cooling mode)
+- No active heating/cooling needed, but air circulation beneficial
+
+**Automatic mode switching:**
+- Fan-only → Cooling: When temperatures rise and AC needed again
+- Cooling → Fan-only: When all rooms reach target or overshoot
+
 #### AC Temperature Control (Fully Automatic Mode)
 
 When enabled, AI automatically sets your AC's temperature setpoint:

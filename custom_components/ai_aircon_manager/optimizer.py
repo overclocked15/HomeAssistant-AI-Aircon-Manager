@@ -25,6 +25,7 @@ class AirconOptimizer:
         temperature_deadband: float = 0.5,
         hvac_mode: str = "cool",
         auto_control_main_ac: bool = False,
+        use_fan_mode_for_circulation: bool = False,
         auto_control_ac_temperature: bool = False,
         enable_notifications: bool = True,
         room_overrides: dict[str, Any] | None = None,
@@ -60,6 +61,7 @@ class AirconOptimizer:
         self.temperature_deadband = temperature_deadband
         self.hvac_mode = hvac_mode
         self.auto_control_main_ac = auto_control_main_ac
+        self.use_fan_mode_for_circulation = use_fan_mode_for_circulation
         self.auto_control_ac_temperature = auto_control_ac_temperature
         self.enable_notifications = enable_notifications
         self.room_overrides = room_overrides or {}
@@ -1302,7 +1304,7 @@ Where:
     async def _control_main_ac(
         self, needs_ac: bool, main_climate_state: dict[str, Any] | None
     ) -> None:
-        """Control the main AC on/off based on need."""
+        """Control the main AC on/off/fan based on need."""
         if not main_climate_state:
             return
 
@@ -1310,8 +1312,8 @@ Where:
 
         try:
             if needs_ac:
-                # Turn on AC if it's off
-                if current_mode == "off":
+                # Turn on AC if it's off or in fan mode
+                if current_mode in ["off", "fan_only"]:
                     target_mode = self.hvac_mode if self.hvac_mode != "auto" else "cool"
                     _LOGGER.info("Turning ON main AC (mode: %s)", target_mode)
                     await self.hass.services.async_call(
@@ -1325,8 +1327,28 @@ Where:
                         f"AI turned on the main AC in {target_mode} mode"
                     )
             else:
-                # Turn off AC if it's on
-                if current_mode and current_mode != "off":
+                # Use fan mode for circulation if enabled, otherwise turn off
+                if current_mode and current_mode not in ["off", "fan_only"]:
+                    if self.use_fan_mode_for_circulation:
+                        # Check if climate entity supports fan_only mode
+                        climate_state = self.hass.states.get(self.main_climate_entity)
+                        if climate_state:
+                            available_modes = climate_state.attributes.get("hvac_modes", [])
+                            if "fan_only" in available_modes:
+                                _LOGGER.info("Switching to FAN mode for air circulation (temps stable/overshooting)")
+                                await self.hass.services.async_call(
+                                    "climate",
+                                    "set_hvac_mode",
+                                    {"entity_id": self.main_climate_entity, "hvac_mode": "fan_only"},
+                                    blocking=True,
+                                )
+                                await self._send_notification(
+                                    "AC Switched to Fan Mode",
+                                    "AI switched to fan mode for air circulation (all rooms stable)"
+                                )
+                                return
+
+                    # Fall back to turning off if fan mode not enabled or not supported
                     _LOGGER.info("Turning OFF main AC (all rooms at target)")
                     await self.hass.services.async_call(
                         "climate",
