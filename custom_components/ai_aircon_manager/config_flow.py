@@ -20,6 +20,7 @@ from .const import (
     CONF_ROOM_CONFIGS,
     CONF_ROOM_NAME,
     CONF_TEMPERATURE_SENSOR,
+    CONF_HUMIDITY_SENSOR,
     CONF_COVER_ENTITY,
     CONF_MAIN_CLIMATE_ENTITY,
     CONF_MAIN_FAN_ENTITY,
@@ -33,6 +34,10 @@ from .const import (
     CONF_WEATHER_ENTITY,
     CONF_ENABLE_WEATHER_ADJUSTMENT,
     CONF_OUTDOOR_TEMP_SENSOR,
+    CONF_ENABLE_HUMIDITY_CONTROL,
+    CONF_TARGET_HUMIDITY_MIN,
+    CONF_TARGET_HUMIDITY_MAX,
+    CONF_HUMIDITY_DEADBAND,
     CONF_ENABLE_SCHEDULING,
     CONF_SCHEDULES,
     CONF_SCHEDULE_NAME,
@@ -147,7 +152,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors
         )
 
-    def _validate_entities(self, temp_sensor: str, cover_entity: str) -> dict[str, str] | None:
+    def _validate_entities(
+        self,
+        temp_sensor: str,
+        cover_entity: str,
+        humidity_sensor: str | None = None
+    ) -> dict[str, str] | None:
         """Validate that entities exist and are available."""
         errors = {}
 
@@ -157,6 +167,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["temperature_sensor"] = "entity_not_found"
         elif temp_state.state in ["unavailable", "unknown"]:
             errors["temperature_sensor"] = "entity_unavailable"
+
+        # Check humidity sensor (optional)
+        if humidity_sensor:
+            humidity_state = self.hass.states.get(humidity_sensor)
+            if not humidity_state:
+                errors["humidity_sensor"] = "entity_not_found"
+            elif humidity_state.state in ["unavailable", "unknown"]:
+                errors["humidity_sensor"] = "entity_unavailable"
 
         # Check cover entity
         cover_state = self.hass.states.get(cover_entity)
@@ -259,7 +277,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options - show menu."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["settings", "manage_rooms", "room_overrides", "weather", "schedules", "advanced"],
+            menu_options=["settings", "manage_rooms", "room_overrides", "weather", "humidity", "schedules", "advanced"],
         )
 
     async def async_step_settings(
@@ -411,7 +429,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             },
         )
 
-    def _validate_entities(self, temp_sensor: str, cover_entity: str) -> dict[str, str] | None:
+    def _validate_entities(
+        self,
+        temp_sensor: str,
+        cover_entity: str,
+        humidity_sensor: str | None = None
+    ) -> dict[str, str] | None:
         """Validate that entities exist and are available."""
         errors = {}
 
@@ -421,6 +444,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             errors["temperature_sensor"] = "entity_not_found"
         elif temp_state.state in ["unavailable", "unknown"]:
             errors["temperature_sensor"] = "entity_unavailable"
+
+        # Check humidity sensor (optional)
+        if humidity_sensor:
+            humidity_state = self.hass.states.get(humidity_sensor)
+            if not humidity_state:
+                errors["humidity_sensor"] = "entity_not_found"
+            elif humidity_state.state in ["unavailable", "unknown"]:
+                errors["humidity_sensor"] = "entity_unavailable"
 
         # Check cover entity
         cover_state = self.hass.states.get(cover_entity)
@@ -441,7 +472,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             # Validate entities
             validation_errors = self._validate_entities(
                 user_input[CONF_TEMPERATURE_SENSOR],
-                user_input[CONF_COVER_ENTITY]
+                user_input[CONF_COVER_ENTITY],
+                user_input.get(CONF_HUMIDITY_SENSOR)
             )
 
             if validation_errors:
@@ -453,6 +485,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_TEMPERATURE_SENSOR: user_input[CONF_TEMPERATURE_SENSOR],
                     CONF_COVER_ENTITY: user_input[CONF_COVER_ENTITY],
                 }
+
+                # Add humidity sensor if provided
+                if user_input.get(CONF_HUMIDITY_SENSOR):
+                    new_room[CONF_HUMIDITY_SENSOR] = user_input[CONF_HUMIDITY_SENSOR]
 
                 current_rooms = list(self.config_entry.data.get(CONF_ROOM_CONFIGS, []))
                 current_rooms.append(new_room)
@@ -475,6 +511,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required(CONF_ROOM_NAME): cv.string,
                     vol.Required(CONF_TEMPERATURE_SENSOR): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="sensor")
+                    ),
+                    vol.Optional(CONF_HUMIDITY_SENSOR): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain="sensor",
+                            device_class="humidity"
+                        )
                     ),
                     vol.Required(CONF_COVER_ENTITY): selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="cover")
@@ -629,6 +671,81 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=vol.Schema(schema_dict),
             description_placeholders={
                 "info": "Weather integration adjusts target temperature based on outdoor conditions. Provide either a weather entity or outdoor temperature sensor (or both for redundancy)."
+            },
+        )
+
+    async def async_step_humidity(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle humidity control configuration."""
+        if user_input is not None:
+            # Merge with existing data
+            new_data = {**self.config_entry.data, **user_input}
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
+            # Reload the integration to apply changes
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        # Check if main climate entity supports dry mode
+        climate_entity = self.config_entry.data.get(CONF_MAIN_CLIMATE_ENTITY)
+        supports_dry_mode = False
+        dry_mode_info = "Note: Your climate entity does not support 'dry' mode. Humidity control will be disabled."
+
+        if climate_entity:
+            climate_state = self.hass.states.get(climate_entity)
+            if climate_state:
+                hvac_modes = climate_state.attributes.get("hvac_modes", [])
+                supports_dry_mode = "dry" in hvac_modes
+                if supports_dry_mode:
+                    dry_mode_info = "Your climate entity supports 'dry' mode. Enable humidity control to automatically switch between cooling and dehumidification."
+
+        # Build schema
+        schema_dict = {
+            vol.Optional(
+                CONF_ENABLE_HUMIDITY_CONTROL,
+                default=self.config_entry.data.get(CONF_ENABLE_HUMIDITY_CONTROL, False),
+            ): cv.boolean,
+            vol.Optional(
+                CONF_TARGET_HUMIDITY_MIN,
+                default=self.config_entry.data.get(CONF_TARGET_HUMIDITY_MIN, 40),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=20, max=80, step=5, mode=selector.NumberSelectorMode.SLIDER, unit_of_measurement="%"
+                )
+            ),
+            vol.Optional(
+                CONF_TARGET_HUMIDITY_MAX,
+                default=self.config_entry.data.get(CONF_TARGET_HUMIDITY_MAX, 60),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=20, max=80, step=5, mode=selector.NumberSelectorMode.SLIDER, unit_of_measurement="%"
+                )
+            ),
+            vol.Optional(
+                CONF_HUMIDITY_DEADBAND,
+                default=self.config_entry.data.get(CONF_HUMIDITY_DEADBAND, 5),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=1, max=10, step=1, mode=selector.NumberSelectorMode.SLIDER, unit_of_measurement="%"
+                )
+            ),
+        }
+
+        # Disable humidity control if dry mode not supported
+        if not supports_dry_mode and user_input is None:
+            # Set enable to False by default if not supported
+            schema_dict[vol.Optional(
+                CONF_ENABLE_HUMIDITY_CONTROL,
+                default=False,
+            )] = cv.boolean
+
+        return self.async_show_form(
+            step_id="humidity",
+            data_schema=vol.Schema(schema_dict),
+            description_placeholders={
+                "info": dry_mode_info,
             },
         )
 

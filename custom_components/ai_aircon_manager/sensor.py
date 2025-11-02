@@ -83,6 +83,15 @@ async def async_setup_entry(
         except Exception as e:
             _LOGGER.error("Failed to create RoomFanSpeedSensor for %s: %s", room_name, e, exc_info=True)
 
+        # Humidity sensor (if room has humidity sensor configured)
+        if room_config.get("humidity_sensor"):
+            try:
+                sensor = RoomHumiditySensor(coordinator, config_entry, room_name)
+                entities.append(sensor)
+                _LOGGER.info("Created RoomHumiditySensor for %s", room_name)
+            except Exception as e:
+                _LOGGER.error("Failed to create RoomHumiditySensor for %s: %s", room_name, e, exc_info=True)
+
     # Add overall status sensor
     entities.append(AIOptimizationStatusSensor(coordinator, config_entry))
 
@@ -119,6 +128,11 @@ async def async_setup_entry(
     if optimizer.enable_scheduling:
         entities.append(ActiveScheduleSensor(coordinator, config_entry))
         entities.append(EffectiveTargetTemperatureSensor(coordinator, config_entry))
+
+    # Add humidity sensors if humidity control is enabled
+    if optimizer.enable_humidity_control:
+        entities.append(AverageHumiditySensor(coordinator, config_entry))
+        entities.append(HumidityStatusSensor(coordinator, config_entry))
 
     _LOGGER.info("Total entities to add: %d", len(entities))
     _LOGGER.info("Entity unique_ids: %s", [e.unique_id for e in entities if hasattr(e, 'unique_id')])
@@ -1199,4 +1213,143 @@ class EffectiveTargetTemperatureSensor(AirconManagerSensorBase):
             attrs["schedule_target"] = active_schedule.get(CONF_SCHEDULE_TARGET_TEMP)
 
         return attrs
+
+
+class RoomHumiditySensor(AirconManagerSensorBase):
+    """Sensor showing current humidity for a room."""
+
+    _attr_device_class = SensorDeviceClass.HUMIDITY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+
+    def __init__(self, coordinator, config_entry: ConfigEntry, room_name: str) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._room_name = room_name
+        self._attr_name = f"{room_name} Humidity"
+        self._attr_unique_id = f"{config_entry.entry_id}_{room_name}_humidity"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current humidity."""
+        room_states = self.coordinator.data.get("room_states", {})
+        room = room_states.get(self._room_name)
+        if room:
+            return room.get("current_humidity")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        room_states = self.coordinator.data.get("room_states", {})
+        room = room_states.get(self._room_name)
+        if not room:
+            return {}
+
+        humidity_sensor = room.get("humidity_sensor")
+        return {
+            "room_name": self._room_name,
+            "humidity_sensor": humidity_sensor,
+        }
+
+
+class AverageHumiditySensor(AirconManagerSensorBase):
+    """Sensor showing average humidity across all rooms with humidity sensors."""
+
+    _attr_device_class = SensorDeviceClass.HUMIDITY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_name = "Average Humidity"
+        self._attr_unique_id = f"{config_entry.entry_id}_average_humidity"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the average humidity."""
+        room_states = self.coordinator.data.get("room_states", {})
+        humidity_readings = [
+            room.get("current_humidity")
+            for room in room_states.values()
+            if room.get("current_humidity") is not None
+        ]
+
+        if humidity_readings:
+            return round(sum(humidity_readings) / len(humidity_readings), 1)
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        room_states = self.coordinator.data.get("room_states", {})
+        humidity_readings = {}
+
+        for room_name, room in room_states.items():
+            humidity = room.get("current_humidity")
+            if humidity is not None:
+                humidity_readings[room_name] = humidity
+
+        return {
+            "room_humidity_readings": humidity_readings,
+            "sensor_count": len(humidity_readings),
+        }
+
+
+class HumidityStatusSensor(AirconManagerSensorBase):
+    """Sensor showing humidity control status."""
+
+    def __init__(self, coordinator, config_entry: ConfigEntry) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_name = "Humidity Status"
+        self._attr_unique_id = f"{config_entry.entry_id}_humidity_status"
+        self._optimizer = coordinator.hass.data[DOMAIN][config_entry.entry_id]["optimizer"]
+
+    @property
+    def native_value(self) -> str:
+        """Return the humidity status."""
+        room_states = self.coordinator.data.get("room_states", {})
+        humidity_readings = [
+            room.get("current_humidity")
+            for room in room_states.values()
+            if room.get("current_humidity") is not None
+        ]
+
+        if not humidity_readings:
+            return "No sensors"
+
+        avg_humidity = sum(humidity_readings) / len(humidity_readings)
+
+        if avg_humidity > self._optimizer.target_humidity_max + self._optimizer.humidity_deadband:
+            return "Too High"
+        elif avg_humidity < self._optimizer.target_humidity_min - self._optimizer.humidity_deadband:
+            return "Too Low"
+        elif avg_humidity > self._optimizer.target_humidity_max:
+            return "Slightly High"
+        elif avg_humidity < self._optimizer.target_humidity_min:
+            return "Slightly Low"
+        else:
+            return "Optimal"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        room_states = self.coordinator.data.get("room_states", {})
+        humidity_readings = [
+            room.get("current_humidity")
+            for room in room_states.values()
+            if room.get("current_humidity") is not None
+        ]
+
+        avg_humidity = sum(humidity_readings) / len(humidity_readings) if humidity_readings else None
+
+        return {
+            "average_humidity": avg_humidity,
+            "target_min": self._optimizer.target_humidity_min,
+            "target_max": self._optimizer.target_humidity_max,
+            "deadband": self._optimizer.humidity_deadband,
+            "enabled": self._optimizer.enable_humidity_control,
+        }
 

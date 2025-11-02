@@ -26,6 +26,11 @@ A Home Assistant integration that uses AI (Claude or ChatGPT) to automatically m
 - **Room Overrides**: Disable AI control for specific rooms while keeping others active
 - **Heating/Cooling Modes**: Support for both heating and cooling with mode-aware optimizations
 - **HVAC Mode Auto-Detection**: Can automatically detect heating/cooling from main climate entity
+- **Humidity Control** (v1.9.0+): Intelligent humidity management with automatic dry mode switching
+  - Optional humidity sensors per room
+  - Automatic switching between cooling and dehumidification
+  - Temperature always prioritized over humidity
+  - Smart mode selection: Cool → Dry → Cool based on conditions
 - **Hysteresis Control**: Prevents rapid AC on/off cycling with configurable thresholds
 - **Startup Delay**: Grace period during Home Assistant startup to prevent false alarms
 - **Persistent Notifications**: Optional notifications for important events (AC control, errors)
@@ -131,6 +136,7 @@ With cost optimizations enabled (Claude Haiku or GPT-4o Mini):
    - **Step 2**: Add rooms one by one:
      - Room name (e.g., "Bedroom")
      - Temperature sensor entity
+     - **(Optional)** Humidity sensor entity (for humidity control)
      - Zone fan speed control entity
    - Keep adding rooms until all configured
 
@@ -145,6 +151,7 @@ You can change settings after initial setup:
    - **Manage Rooms**: Add or remove rooms
    - **Room Overrides**: Enable/disable AI control for specific rooms
    - **Weather**: Configure weather integration and outdoor temperature adjustments
+   - **Humidity**: Configure humidity control and dehumidification settings
    - **Schedules**: Manage time-based temperature schedules
 
 #### Key Settings
@@ -222,6 +229,47 @@ To create temperature schedules:
 - **Sleep Schedule**: 22:00-08:00, All Days, 20°C (cooler for sleeping)
 - **Work Hours**: 09:00-17:00, Weekdays, 24°C (warmer when home is empty)
 - **Weekend Comfort**: 08:00-23:00, Weekends, 22°C
+
+#### Humidity Control
+
+To enable intelligent humidity management:
+
+1. Go to **Settings** → **Devices & Services** → **AI Aircon Manager** → **Configure**
+2. Select **"Humidity"**
+3. Configure settings:
+   - **Enable humidity control**: Turn on/off humidity management
+   - **Target humidity minimum**: Lower bound of comfort range (default: 40%)
+   - **Target humidity maximum**: Upper bound of comfort range (default: 60%)
+   - **Humidity deadband**: Buffer zone to prevent oscillation (default: 5%)
+4. Save
+
+**Prerequisites:**
+- Your AC unit must support "dry" or "dehumidify" mode (the UI will check and notify you)
+- At least one room should have a humidity sensor configured
+
+**How it works:**
+
+The AI intelligently balances temperature and humidity:
+
+1. **Temperature Priority**: If any room temperature is outside the deadband, AI focuses on cooling/heating
+2. **Humidity Mode**: When all temperatures are stable AND humidity is high (>65% by default):
+   - AI switches AC to "dry" mode for dehumidification
+   - Maintains moderate fan speeds for air circulation
+3. **Return to Cooling**: If temperatures rise while in dry mode:
+   - AI switches back to "cool" mode
+   - Prioritizes temperature comfort first
+
+**Adding Humidity Sensors to Rooms:**
+1. Go to **Settings** → **Devices & Services** → **AI Aircon Manager** → **Configure**
+2. Select **"Manage Rooms"** → **"Add new room"** (or edit existing)
+3. Select a humidity sensor for the room (optional field)
+4. Not all rooms need humidity sensors - the AI will use average humidity from rooms that have sensors
+
+**Benefits:**
+- Prevents excessive humidity that can cause discomfort and mold
+- Maintains optimal indoor air quality (40-60% humidity)
+- Temperature always takes priority for comfort
+- Automatic mode switching - no manual intervention needed
 
 ## Cost Optimization
 
@@ -315,6 +363,8 @@ The integration creates comprehensive diagnostic sensors:
 - `sensor.{room_name}_ai_recommendation` - AI's recommended fan speed
   - Attributes: current vs recommended speed, change being made
 - `sensor.{room_name}_fan_speed` - Current fan speed percentage
+- `sensor.{room_name}_humidity` - Current humidity percentage (if humidity sensor configured)
+  - Attributes: room name, humidity sensor entity
 
 #### Overall System Sensors
 - `sensor.ai_optimization_status` - System status (`maintaining`, `equalizing`, `cooling`, etc.)
@@ -351,6 +401,13 @@ The integration creates comprehensive diagnostic sensors:
   - Attributes: schedule details (days, times, target temperature, status)
 - `sensor.effective_target_temperature` - Final target after schedule and weather adjustments
   - Attributes: base target, weather adjustment, schedule info
+
+#### Humidity Control Sensors (if enabled)
+- `sensor.average_humidity` - Average humidity across all rooms with sensors
+  - Attributes: per-room readings, sensor count
+- `sensor.humidity_status` - Current humidity status
+  - Values: "Optimal", "Too High", "Slightly High", "Too Low", "Slightly Low"
+  - Attributes: average humidity, target range, deadband, enabled status
 
 ### Main Aircon Fan Control Logic
 

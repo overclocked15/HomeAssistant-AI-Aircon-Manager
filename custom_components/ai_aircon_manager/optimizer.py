@@ -43,6 +43,10 @@ class AirconOptimizer:
         overshoot_tier1_threshold: float = 1.0,
         overshoot_tier2_threshold: float = 2.0,
         overshoot_tier3_threshold: float = 3.0,
+        enable_humidity_control: bool = False,
+        target_humidity_min: int = 40,
+        target_humidity_max: int = 60,
+        humidity_deadband: int = 5,
     ) -> None:
         """Initialize the optimizer."""
         self.hass = hass
@@ -73,6 +77,10 @@ class AirconOptimizer:
         self.overshoot_tier1_threshold = overshoot_tier1_threshold
         self.overshoot_tier2_threshold = overshoot_tier2_threshold
         self.overshoot_tier3_threshold = overshoot_tier3_threshold
+        self.enable_humidity_control = enable_humidity_control
+        self.target_humidity_min = target_humidity_min
+        self.target_humidity_max = target_humidity_max
+        self.humidity_deadband = humidity_deadband
         self._ai_client = None
         self._last_ai_response = None
         self._last_error = None
@@ -554,12 +562,43 @@ class AirconOptimizer:
                         e,
                     )
 
+            # Get humidity (optional)
+            current_humidity = None
+            humidity_sensor = room.get("humidity_sensor")
+
+            if humidity_sensor:
+                humidity_state = self.hass.states.get(humidity_sensor)
+                if humidity_state and humidity_state.state not in ["unknown", "unavailable", "none", None]:
+                    try:
+                        current_humidity = float(humidity_state.state)
+                        _LOGGER.debug(
+                            "Room %s: Successfully read humidity=%.1f%%",
+                            room_name,
+                            current_humidity,
+                        )
+                    except (ValueError, TypeError) as e:
+                        _LOGGER.warning(
+                            "Could not convert humidity for %s (%s): %s = %s",
+                            room_name,
+                            humidity_sensor,
+                            humidity_state.state,
+                            e,
+                        )
+                else:
+                    _LOGGER.debug(
+                        "Room %s: Humidity sensor %s has no valid data",
+                        room_name,
+                        humidity_sensor,
+                    )
+
             room_states[room_name] = {
                 "current_temperature": current_temp,
                 "target_temperature": effective_target,
                 "cover_position": cover_position,
                 "temperature_sensor": temp_sensor,
                 "cover_entity": cover_entity,
+                "current_humidity": current_humidity,
+                "humidity_sensor": humidity_sensor,
             }
 
         return room_states
@@ -650,11 +689,30 @@ CRITICAL:
 - Rooms BELOW target temperature: Need LOW fan speed (don't want cool air, let them warm naturally)
 """
 
+        # Calculate average humidity for rooms with sensors
+        humidity_readings = [s.get('current_humidity') for s in room_states.values() if s.get('current_humidity') is not None]
+        avg_humidity = sum(humidity_readings) / len(humidity_readings) if humidity_readings else None
+
+        humidity_info = ""
+        if self.enable_humidity_control and avg_humidity is not None:
+            humidity_status = "OPTIMAL"
+            if avg_humidity > self.target_humidity_max + self.humidity_deadband:
+                humidity_status = "TOO HIGH"
+            elif avg_humidity < self.target_humidity_min - self.humidity_deadband:
+                humidity_status = "TOO LOW"
+
+            humidity_info = f"""
+Humidity Control: ENABLED
+Target humidity range: {self.target_humidity_min}-{self.target_humidity_max}%
+Humidity deadband: {self.humidity_deadband}%
+Average house humidity: {avg_humidity:.1f}% (Status: {humidity_status})
+"""
+
         prompt = f"""You are an intelligent HVAC management system. I have a central HVAC system in {system_type} mode with individual zone fan speed controls for each room.
 
 Target temperature for all rooms: {effective_target}°C
 Temperature deadband: {self.temperature_deadband}°C (rooms within this range are considered at target)
-
+{humidity_info}
 {prompt_mode_explanation}
 
 Current room states:
@@ -663,9 +721,13 @@ Current room states:
             temp_diff = state['current_temperature'] - effective_target if state['current_temperature'] is not None else 0
             temp_status = "AT TARGET" if abs(temp_diff) <= self.temperature_deadband else ("TOO HOT" if temp_diff > 0 else "TOO COLD")
 
+            humidity_str = ""
+            if state.get('current_humidity') is not None:
+                humidity_str = f"\n  - Current humidity: {state['current_humidity']:.1f}%"
+
             prompt += f"""
 Room: {room_name}
-  - Current temperature: {state['current_temperature']}°C (Target: {effective_target}°C, Difference: {temp_diff:+.1f}°C, Status: {temp_status})
+  - Current temperature: {state['current_temperature']}°C (Target: {effective_target}°C, Difference: {temp_diff:+.1f}°C, Status: {temp_status}){humidity_str}
   - Current zone fan speed: {state['cover_position']}% (0% = off, 100% = full speed)
 """
 
@@ -708,6 +770,36 @@ Management strategy for COOLING MODE:
    - Set fan to 50-70% (maintain equilibrium with good circulation)
 """
 
+        humidity_strategy = ""
+        if self.enable_humidity_control and avg_humidity is not None:
+            humidity_strategy = f"""
+HUMIDITY MANAGEMENT (PRIORITY: Temperature First, Then Humidity):
+
+CRITICAL DECISION LOGIC:
+1. IF any room temperature is outside deadband (±{self.temperature_deadband}°C):
+   - PRIORITIZE temperature control (use cooling/heating mode as normal)
+   - Follow temperature-based fan speed recommendations above
+   - Ignore humidity for now
+
+2. IF all room temperatures are stable (within ±{self.temperature_deadband}°C) AND humidity is high (>{self.target_humidity_max + self.humidity_deadband}%):
+   - Recommend switching to DRY mode for dehumidification
+   - Maintain moderate fan speeds (40-60%) to circulate dehumidified air
+   - Include "hvac_mode": "dry" in your JSON response
+
+3. IF in DRY mode AND temperatures rising beyond deadband:
+   - Recommend switching back to COOLING mode
+   - Include "hvac_mode": "cool" in your JSON response
+   - Resume temperature-priority control
+
+Humidity Targets:
+- Optimal range: {self.target_humidity_min}-{self.target_humidity_max}%
+- Current average: {avg_humidity:.1f}%
+- Deadband: {self.humidity_deadband}%
+
+Remember: Temperature comfort ALWAYS takes priority over humidity control.
+Only focus on humidity when temperatures are stable and comfortable.
+"""
+
         prompt += f"""
 {strategy}
 
@@ -720,6 +812,7 @@ Key principles:
 - Balance the system: redistribute airflow to equalize temperatures while maintaining circulation
 - Goal is whole-home temperature equilibrium at target with good air quality
 - Deadband: rooms within ±{self.temperature_deadband}°C are acceptable
+{humidity_strategy}
 """
 
         # Add AC temperature control section if enabled
@@ -768,12 +861,14 @@ Respond ONLY with a JSON object in this exact format (no other text):
 {{
   "room_name_1": recommended_fan_speed,
   "room_name_2": recommended_fan_speed,
-  "ac_temperature": recommended_ac_temperature
+  "ac_temperature": recommended_ac_temperature,
+  "hvac_mode": "cool|heat|dry"  // Optional: only include if recommending mode change
 }}
 
 Where:
 - recommended_fan_speed is an integer between 0 and 100
 - recommended_ac_temperature is an integer temperature in Celsius (typically 18-26°C)
+- hvac_mode is optional, only include when humidity control requires mode change
 """
         else:
             prompt += """
@@ -781,10 +876,13 @@ Where:
 Respond ONLY with a JSON object in this exact format (no other text):
 {{
   "room_name_1": recommended_fan_speed,
-  "room_name_2": recommended_fan_speed
+  "room_name_2": recommended_fan_speed,
+  "hvac_mode": "cool|heat|dry"  // Optional: only include if recommending mode change
 }}
 
-Where recommended_fan_speed is an integer between 0 and 100.
+Where:
+- recommended_fan_speed is an integer between 0 and 100
+- hvac_mode is optional, only include when humidity control requires mode change
 """
 
         return prompt
@@ -814,6 +912,13 @@ Where recommended_fan_speed is an integer between 0 and 100.
                     # Clamp to reasonable range (16-30°C)
                     validated["ac_temperature"] = max(16, min(30, ac_temp))
 
+                # Extract HVAC mode if present (for humidity control)
+                if "hvac_mode" in recommendations:
+                    mode = str(recommendations["hvac_mode"]).lower()
+                    # Validate mode
+                    if mode in ["cool", "heat", "dry", "auto"]:
+                        validated["hvac_mode"] = mode
+
                 return validated
         except Exception as e:
             _LOGGER.error("Error parsing AI response: %s", e)
@@ -823,14 +928,18 @@ Where recommended_fan_speed is an integer between 0 and 100.
 
     async def _apply_recommendations(self, recommendations: dict[str, int | float]) -> None:
         """Apply the recommended cover positions and AC temperature (respecting room overrides)."""
-        # First, handle AC temperature if present and enabled
+        # First, handle HVAC mode change if present and enabled
+        if "hvac_mode" in recommendations and self.enable_humidity_control and self.main_climate_entity:
+            await self._set_hvac_mode(recommendations["hvac_mode"])
+
+        # Second, handle AC temperature if present and enabled
         if "ac_temperature" in recommendations and self.auto_control_ac_temperature and self.main_climate_entity:
             await self._set_ac_temperature(recommendations["ac_temperature"])
 
         # Then apply room fan speeds
         for room_name, position in recommendations.items():
-            # Skip the ac_temperature key
-            if room_name == "ac_temperature":
+            # Skip the ac_temperature and hvac_mode keys
+            if room_name in ["ac_temperature", "hvac_mode"]:
                 continue
             # Check if this room is disabled via override
             room_override = self.room_overrides.get(f"{room_name}_enabled")
@@ -1278,6 +1387,76 @@ Where recommended_fan_speed is an integer between 0 and 100.
         except Exception as e:
             _LOGGER.error("Error setting AC temperature: %s", e)
             self._last_error = f"AC Temperature Control Error: {e}"
+            self._error_count += 1
+
+    async def _set_hvac_mode(self, mode: str) -> None:
+        """Set the main AC HVAC mode (for humidity control)."""
+        if not self.main_climate_entity:
+            return
+
+        try:
+            # Get current climate state to check if mode needs changing
+            climate_state = self.hass.states.get(self.main_climate_entity)
+            if not climate_state:
+                _LOGGER.warning("Main climate entity %s not found", self.main_climate_entity)
+                return
+
+            current_mode = climate_state.attributes.get("hvac_mode")
+
+            # Only update if mode has changed
+            if current_mode == mode:
+                _LOGGER.debug(
+                    "Skipping HVAC mode update - already in %s mode",
+                    mode
+                )
+                return
+
+            # Check if the climate entity supports this mode
+            available_modes = climate_state.attributes.get("hvac_modes", [])
+            if mode not in available_modes:
+                _LOGGER.warning(
+                    "Climate entity %s does not support mode '%s'. Available modes: %s",
+                    self.main_climate_entity,
+                    mode,
+                    available_modes
+                )
+                return
+
+            _LOGGER.info(
+                "AI recommending HVAC mode change: %s → %s (humidity control)",
+                current_mode,
+                mode
+            )
+
+            await self.hass.services.async_call(
+                "climate",
+                "set_hvac_mode",
+                {
+                    "entity_id": self.main_climate_entity,
+                    "hvac_mode": mode
+                },
+                blocking=True,
+            )
+
+            # Update our internal state
+            self.hvac_mode = mode
+
+            # Send notification about mode change
+            reason_map = {
+                "dry": "dehumidification needed (temperature stable, humidity high)",
+                "cool": "cooling needed (temperature rising)",
+                "heat": "heating needed (temperature dropping)"
+            }
+            reason = reason_map.get(mode, f"mode changed to {mode}")
+
+            await self._send_notification(
+                "HVAC Mode Changed",
+                f"AI switched AC to {mode.upper()} mode: {reason}"
+            )
+
+        except Exception as e:
+            _LOGGER.error("Error setting HVAC mode: %s", e)
+            self._last_error = f"HVAC Mode Control Error: {e}"
             self._error_count += 1
 
     async def _send_notification(self, title: str, message: str) -> None:

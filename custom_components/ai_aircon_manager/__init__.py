@@ -29,6 +29,10 @@ from .const import (
     DEFAULT_OVERSHOOT_TIER1_THRESHOLD,
     DEFAULT_OVERSHOOT_TIER2_THRESHOLD,
     DEFAULT_OVERSHOOT_TIER3_THRESHOLD,
+    DEFAULT_ENABLE_HUMIDITY_CONTROL,
+    DEFAULT_TARGET_HUMIDITY_MIN,
+    DEFAULT_TARGET_HUMIDITY_MAX,
+    DEFAULT_HUMIDITY_DEADBAND,
 )
 from .optimizer import AirconOptimizer
 
@@ -44,7 +48,7 @@ def get_device_info(config_entry: ConfigEntry) -> dict:
         "name": "AI Aircon Manager",
         "manufacturer": "AI Aircon Manager",
         "model": "AI-Powered HVAC Controller",
-        "sw_version": "1.8.3",
+        "sw_version": "1.9.0",
     }
 
 
@@ -86,6 +90,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         overshoot_tier1_threshold=entry.data.get("overshoot_tier1_threshold", DEFAULT_OVERSHOOT_TIER1_THRESHOLD),
         overshoot_tier2_threshold=entry.data.get("overshoot_tier2_threshold", DEFAULT_OVERSHOOT_TIER2_THRESHOLD),
         overshoot_tier3_threshold=entry.data.get("overshoot_tier3_threshold", DEFAULT_OVERSHOOT_TIER3_THRESHOLD),
+        enable_humidity_control=entry.data.get("enable_humidity_control", DEFAULT_ENABLE_HUMIDITY_CONTROL),
+        target_humidity_min=entry.data.get("target_humidity_min", DEFAULT_TARGET_HUMIDITY_MIN),
+        target_humidity_max=entry.data.get("target_humidity_max", DEFAULT_TARGET_HUMIDITY_MAX),
+        humidity_deadband=entry.data.get("humidity_deadband", DEFAULT_HUMIDITY_DEADBAND),
     )
 
     # Get update interval from config (for AI optimization)
