@@ -772,9 +772,38 @@ Management strategy for COOLING MODE:
    - Set fan to 50-70% (maintain equilibrium with good circulation)
 """
 
-        humidity_strategy = ""
+        # Build energy-saving and comfort strategies
+        additional_strategies = ""
+
+        # Fan-only mode for energy savings
+        if self.use_fan_mode_for_circulation:
+            additional_strategies += f"""
+FAN-ONLY MODE FOR ENERGY SAVINGS:
+
+CRITICAL DECISION LOGIC:
+1. IF all rooms are at target OR overshooting (rooms cooler than target in cooling mode):
+   - Recommend switching to FAN_ONLY mode to maintain air circulation
+   - Compressor off, fan circulates air to equalize temperatures
+   - Saves ~95% energy vs running compressor
+   - Include "hvac_mode": "fan_only" in your JSON response
+   - Continue recommending zone fan speeds for circulation
+
+2. IF in FAN_ONLY mode AND any room needs active cooling/heating (exceeds deadband):
+   - Recommend switching back to COOL/HEAT mode
+   - Include "hvac_mode": "cool" or "heat" in your JSON response
+   - Resume normal temperature control
+
+FAN_ONLY is perfect when:
+- All rooms within ±{self.temperature_deadband}°C of target
+- Some rooms overshooting (naturally cooling/warming toward target)
+- Air circulation helpful for temperature distribution
+- No active compressor needed
+
+"""
+
+        # Humidity management
         if self.enable_humidity_control and avg_humidity is not None:
-            humidity_strategy = f"""
+            additional_strategies += f"""
 HUMIDITY MANAGEMENT (PRIORITY: Temperature First, Then Humidity):
 
 CRITICAL DECISION LOGIC:
@@ -814,7 +843,8 @@ Key principles:
 - Balance the system: redistribute airflow to equalize temperatures while maintaining circulation
 - Goal is whole-home temperature equilibrium at target with good air quality
 - Deadband: rooms within ±{self.temperature_deadband}°C are acceptable
-{humidity_strategy}
+
+{additional_strategies}
 """
 
         # Add AC temperature control section if enabled
@@ -864,13 +894,13 @@ Respond ONLY with a JSON object in this exact format (no other text):
   "room_name_1": recommended_fan_speed,
   "room_name_2": recommended_fan_speed,
   "ac_temperature": recommended_ac_temperature,
-  "hvac_mode": "cool|heat|dry"  // Optional: only include if recommending mode change
+  "hvac_mode": "cool|heat|dry|fan_only"  // Optional: only include if recommending mode change
 }}
 
 Where:
 - recommended_fan_speed is an integer between 0 and 100
 - recommended_ac_temperature is an integer temperature in Celsius (typically 18-26°C)
-- hvac_mode is optional, only include when humidity control requires mode change
+- hvac_mode is optional, include when energy-saving fan mode, humidity control, or temperature control requires mode change
 """
         else:
             prompt += """
@@ -879,12 +909,12 @@ Respond ONLY with a JSON object in this exact format (no other text):
 {{
   "room_name_1": recommended_fan_speed,
   "room_name_2": recommended_fan_speed,
-  "hvac_mode": "cool|heat|dry"  // Optional: only include if recommending mode change
+  "hvac_mode": "cool|heat|dry|fan_only"  // Optional: only include if recommending mode change
 }}
 
 Where:
 - recommended_fan_speed is an integer between 0 and 100
-- hvac_mode is optional, only include when humidity control requires mode change
+- hvac_mode is optional, include when energy-saving fan mode, humidity control, or temperature control requires mode change
 """
 
         return prompt
@@ -914,11 +944,11 @@ Where:
                     # Clamp to reasonable range (16-30°C)
                     validated["ac_temperature"] = max(16, min(30, ac_temp))
 
-                # Extract HVAC mode if present (for humidity control)
+                # Extract HVAC mode if present (for humidity/energy control)
                 if "hvac_mode" in recommendations:
                     mode = str(recommendations["hvac_mode"]).lower()
                     # Validate mode
-                    if mode in ["cool", "heat", "dry", "auto"]:
+                    if mode in ["cool", "heat", "dry", "auto", "fan_only"]:
                         validated["hvac_mode"] = mode
 
                 return validated
@@ -930,9 +960,11 @@ Where:
 
     async def _apply_recommendations(self, recommendations: dict[str, int | float]) -> None:
         """Apply the recommended cover positions and AC temperature (respecting room overrides)."""
-        # First, handle HVAC mode change if present and enabled
-        if "hvac_mode" in recommendations and self.enable_humidity_control and self.main_climate_entity:
-            await self._set_hvac_mode(recommendations["hvac_mode"])
+        # First, handle HVAC mode change if present and AI mode control enabled
+        if "hvac_mode" in recommendations and self.main_climate_entity:
+            # Allow mode changes if humidity control OR fan circulation enabled
+            if self.enable_humidity_control or self.use_fan_mode_for_circulation:
+                await self._set_hvac_mode(recommendations["hvac_mode"])
 
         # Second, handle AC temperature if present and enabled
         if "ac_temperature" in recommendations and self.auto_control_ac_temperature and self.main_climate_entity:
@@ -1304,7 +1336,7 @@ Where:
     async def _control_main_ac(
         self, needs_ac: bool, main_climate_state: dict[str, Any] | None
     ) -> None:
-        """Control the main AC on/off/fan based on need."""
+        """Control the main AC on/off based on need (AI handles mode selection)."""
         if not main_climate_state:
             return
 
@@ -1313,9 +1345,10 @@ Where:
         try:
             if needs_ac:
                 # Turn on AC if it's off or in fan mode
+                # AI will determine the appropriate mode (cool/heat/dry/fan_only) via hvac_mode in response
                 if current_mode in ["off", "fan_only"]:
                     target_mode = self.hvac_mode if self.hvac_mode != "auto" else "cool"
-                    _LOGGER.info("Turning ON main AC (mode: %s)", target_mode)
+                    _LOGGER.info("Turning ON main AC (mode: %s) - AI will optimize mode", target_mode)
                     await self.hass.services.async_call(
                         "climate",
                         "set_hvac_mode",
@@ -1327,28 +1360,9 @@ Where:
                         f"AI turned on the main AC in {target_mode} mode"
                     )
             else:
-                # Use fan mode for circulation if enabled, otherwise turn off
+                # Turn off AC if it's on (not in off or fan_only)
+                # Note: AI may recommend fan_only mode via hvac_mode in response instead
                 if current_mode and current_mode not in ["off", "fan_only"]:
-                    if self.use_fan_mode_for_circulation:
-                        # Check if climate entity supports fan_only mode
-                        climate_state = self.hass.states.get(self.main_climate_entity)
-                        if climate_state:
-                            available_modes = climate_state.attributes.get("hvac_modes", [])
-                            if "fan_only" in available_modes:
-                                _LOGGER.info("Switching to FAN mode for air circulation (temps stable/overshooting)")
-                                await self.hass.services.async_call(
-                                    "climate",
-                                    "set_hvac_mode",
-                                    {"entity_id": self.main_climate_entity, "hvac_mode": "fan_only"},
-                                    blocking=True,
-                                )
-                                await self._send_notification(
-                                    "AC Switched to Fan Mode",
-                                    "AI switched to fan mode for air circulation (all rooms stable)"
-                                )
-                                return
-
-                    # Fall back to turning off if fan mode not enabled or not supported
                     _LOGGER.info("Turning OFF main AC (all rooms at target)")
                     await self.hass.services.async_call(
                         "climate",
@@ -1412,7 +1426,7 @@ Where:
             self._error_count += 1
 
     async def _set_hvac_mode(self, mode: str) -> None:
-        """Set the main AC HVAC mode (for humidity control)."""
+        """Set the main AC HVAC mode (AI-driven: humidity/energy control)."""
         if not self.main_climate_entity:
             return
 
@@ -1437,15 +1451,15 @@ Where:
             available_modes = climate_state.attributes.get("hvac_modes", [])
             if mode not in available_modes:
                 _LOGGER.warning(
-                    "Climate entity %s does not support mode '%s'. Available modes: %s",
-                    self.main_climate_entity,
+                    "AI recommended mode '%s' but climate entity %s does not support it. Available modes: %s",
                     mode,
+                    self.main_climate_entity,
                     available_modes
                 )
                 return
 
             _LOGGER.info(
-                "AI recommending HVAC mode change: %s → %s (humidity control)",
+                "AI recommending HVAC mode change: %s → %s",
                 current_mode,
                 mode
             )
@@ -1467,13 +1481,14 @@ Where:
             reason_map = {
                 "dry": "dehumidification needed (temperature stable, humidity high)",
                 "cool": "cooling needed (temperature rising)",
-                "heat": "heating needed (temperature dropping)"
+                "heat": "heating needed (temperature dropping)",
+                "fan_only": "energy-saving circulation (all rooms stable/overshooting)"
             }
             reason = reason_map.get(mode, f"mode changed to {mode}")
 
             await self._send_notification(
                 "HVAC Mode Changed",
-                f"AI switched AC to {mode.upper()} mode: {reason}"
+                f"AI switched AC to {mode.upper().replace('_', ' ')} mode: {reason}"
             )
 
         except Exception as e:
