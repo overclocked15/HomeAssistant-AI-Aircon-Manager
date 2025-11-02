@@ -166,18 +166,25 @@ You can change settings after initial setup:
 - **Automatically control AC temperature**: Enable full automation of AC temperature setpoint
 - **Enable notifications**: Get notified of important events
 
-#### Adding/Removing Rooms
+#### Managing Rooms (Add/Edit/Remove)
 
-To add new rooms (e.g., after installing new zones or sensors):
+To manage your room configurations:
 
 1. Go to **Settings** → **Devices & Services** → **AI Aircon Manager** → **Configure**
 2. Select **"Manage Rooms"**
 3. Choose an action:
-   - **Add new room**: Add a new room with its sensor and zone control
+   - **Add new room**: Add a new room with its sensors and zone control
+   - **Edit existing room**: Modify sensors or zone control for an existing room
    - **Remove existing room**: Remove a room from the system
    - **Done**: Return to the main menu
 
-**Note**: The integration automatically reloads after adding or removing rooms, and new diagnostic sensors are created for newly added rooms.
+**Editing Rooms** is perfect for:
+- Adding humidity sensors to existing rooms
+- Changing temperature sensors
+- Updating zone fan control entities
+- Renaming rooms
+
+**Note**: The integration automatically reloads after adding, editing, or removing rooms. When editing, new diagnostic sensors are created if you add a humidity sensor.
 
 #### Room Overrides
 

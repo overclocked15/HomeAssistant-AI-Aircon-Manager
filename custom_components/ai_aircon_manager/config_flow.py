@@ -270,6 +270,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Initialize options flow."""
         # config_entry is already available as self.config_entry via parent class
         self._rooms = list(config_entry.data.get(CONF_ROOM_CONFIGS, []))
+        self._room_to_edit = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -400,6 +401,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             if user_input.get("action") == "add":
                 return await self.async_step_add_room()
+            elif user_input.get("action") == "edit":
+                return await self.async_step_edit_room_select()
             elif user_input.get("action") == "remove":
                 return await self.async_step_remove_room()
             elif user_input.get("action") == "done":
@@ -416,6 +419,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         selector.SelectSelectorConfig(
                             options=[
                                 {"label": "Add new room", "value": "add"},
+                                {"label": "Edit existing room", "value": "edit"},
                                 {"label": "Remove existing room", "value": "remove"},
                                 {"label": "Done", "value": "done"},
                             ],
@@ -573,6 +577,133 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     ),
                 }
             ),
+        )
+
+    async def async_step_edit_room_select(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Select which room to edit."""
+        current_rooms = self.config_entry.data.get(CONF_ROOM_CONFIGS, [])
+
+        if not current_rooms:
+            return await self.async_step_manage_rooms()
+
+        if user_input is not None:
+            # Store the selected room name and move to edit step
+            self._room_to_edit = user_input["room_to_edit"]
+            return await self.async_step_edit_room()
+
+        # Create list of rooms to choose from
+        room_options = [
+            {"label": room[CONF_ROOM_NAME], "value": room[CONF_ROOM_NAME]}
+            for room in current_rooms
+        ]
+
+        return self.async_show_form(
+            step_id="edit_room_select",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("room_to_edit"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=room_options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_edit_room(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Edit an existing room."""
+        errors = {}
+        current_rooms = self.config_entry.data.get(CONF_ROOM_CONFIGS, [])
+
+        # Find the room being edited
+        room_to_edit = next(
+            (room for room in current_rooms if room[CONF_ROOM_NAME] == self._room_to_edit),
+            None
+        )
+
+        if not room_to_edit:
+            return await self.async_step_manage_rooms()
+
+        if user_input is not None:
+            # Validate entities
+            validation_errors = self._validate_entities(
+                user_input[CONF_TEMPERATURE_SENSOR],
+                user_input[CONF_COVER_ENTITY],
+                user_input.get(CONF_HUMIDITY_SENSOR)
+            )
+
+            if validation_errors:
+                errors = validation_errors
+            else:
+                # Update the room configuration
+                updated_room = {
+                    CONF_ROOM_NAME: user_input[CONF_ROOM_NAME],
+                    CONF_TEMPERATURE_SENSOR: user_input[CONF_TEMPERATURE_SENSOR],
+                    CONF_COVER_ENTITY: user_input[CONF_COVER_ENTITY],
+                }
+
+                # Add humidity sensor if provided
+                if user_input.get(CONF_HUMIDITY_SENSOR):
+                    updated_room[CONF_HUMIDITY_SENSOR] = user_input[CONF_HUMIDITY_SENSOR]
+
+                # Replace the old room with updated room
+                updated_rooms = [
+                    updated_room if room[CONF_ROOM_NAME] == self._room_to_edit else room
+                    for room in current_rooms
+                ]
+
+                # Update the config entry
+                new_data = {**self.config_entry.data, CONF_ROOM_CONFIGS: updated_rooms}
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data=new_data
+                )
+
+                # Reload the integration
+                await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+
+                return await self.async_step_manage_rooms()
+
+        # Pre-fill the form with current values
+        return self.async_show_form(
+            step_id="edit_room",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ROOM_NAME,
+                        default=room_to_edit.get(CONF_ROOM_NAME)
+                    ): cv.string,
+                    vol.Required(
+                        CONF_TEMPERATURE_SENSOR,
+                        default=room_to_edit.get(CONF_TEMPERATURE_SENSOR)
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor")
+                    ),
+                    vol.Optional(
+                        CONF_HUMIDITY_SENSOR,
+                        default=room_to_edit.get(CONF_HUMIDITY_SENSOR)
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain="sensor",
+                            device_class="humidity"
+                        )
+                    ),
+                    vol.Required(
+                        CONF_COVER_ENTITY,
+                        default=room_to_edit.get(CONF_COVER_ENTITY)
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="cover")
+                    ),
+                }
+            ),
+            errors=errors,
+            description_placeholders={
+                "room_name": self._room_to_edit,
+            },
         )
 
     async def async_step_room_overrides(
