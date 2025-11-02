@@ -42,9 +42,10 @@
         "description": "Choose what you want to configure",
         "menu_options": {
           "settings": "Change Settings (temperature, entities, modes)",
-          "manage_rooms": "Manage Rooms (add/remove rooms)",
+          "manage_rooms": "Manage Rooms (add/edit/remove rooms)",
           "room_overrides": "Room Overrides (enable/disable AI control per room)",
           "weather": "Weather Integration (outdoor temperature adjustments)",
+          "humidity": "Humidity Control (automatic dehumidification)",
           "schedules": "Time-Based Scheduling (different temps for different times)",
           "advanced": "Advanced Settings (fine-tune thresholds and behavior)"
         }
@@ -78,6 +79,24 @@
         "data": {
           "room_name": "Room Name",
           "temperature_sensor": "Temperature Sensor",
+          "humidity_sensor": "Humidity Sensor (Optional)",
+          "cover_entity": "Zone Fan Speed Control"
+        }
+      },
+      "edit_room_select": {
+        "title": "Edit Room - Select",
+        "description": "Select which room to edit",
+        "data": {
+          "room_to_edit": "Room to Edit"
+        }
+      },
+      "edit_room": {
+        "title": "Edit Room: {room_name}",
+        "description": "Update room configuration. Changes will reload the integration.",
+        "data": {
+          "room_name": "Room Name",
+          "temperature_sensor": "Temperature Sensor",
+          "humidity_sensor": "Humidity Sensor (Optional)",
           "cover_entity": "Zone Fan Speed Control"
         }
       },
@@ -100,6 +119,16 @@
           "enable_weather_adjustment": "Enable weather-based temperature adjustments",
           "weather_entity": "Weather Entity (e.g., weather.home)",
           "outdoor_temp_sensor": "Outdoor Temperature Sensor (alternative or backup)"
+        }
+      },
+      "humidity": {
+        "title": "Humidity Control",
+        "description": "Configure intelligent humidity management. The AI will automatically switch between cooling and dehumidification to maintain optimal comfort.\n\n{info}",
+        "data": {
+          "enable_humidity_control": "Enable humidity control",
+          "target_humidity_min": "Target Humidity Minimum (%)",
+          "target_humidity_max": "Target Humidity Maximum (%)",
+          "humidity_deadband": "Humidity Deadband (%) - buffer to prevent oscillation"
         }
       },
       "schedules": {
