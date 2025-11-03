@@ -114,6 +114,10 @@ async def async_setup_entry(
     if optimizer.main_fan_entity:
         entities.append(MainFanSpeedRecommendationSensor(coordinator, config_entry))
 
+    # Add HVAC mode recommendation sensor if main climate entity is configured
+    if optimizer.main_climate_entity:
+        entities.append(HVACModeRecommendationSensor(coordinator, config_entry, optimizer))
+
     # Add AC temperature control sensors if auto control is enabled
     if optimizer.auto_control_ac_temperature and optimizer.main_climate_entity:
         entities.append(ACTemperatureRecommendationSensor(coordinator, config_entry))
@@ -1352,4 +1356,159 @@ class HumidityStatusSensor(AirconManagerSensorBase):
             "deadband": self._optimizer.humidity_deadband,
             "enabled": self._optimizer.enable_humidity_control,
         }
+
+
+class HVACModeRecommendationSensor(AirconManagerSensorBase):
+    """Debug sensor showing AI's HVAC mode recommendation and reasoning."""
+
+    def __init__(self, coordinator, config_entry: ConfigEntry, optimizer) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry, optimizer)
+        self._attr_unique_id = f"{config_entry.entry_id}_hvac_mode_recommendation"
+        self._attr_name = "HVAC Mode Recommendation"
+        self._attr_icon = "mdi:air-conditioner"
+
+    @property
+    def native_value(self) -> str:
+        """Return the AI recommended HVAC mode."""
+        if not self.coordinator.data:
+            return "unknown"
+
+        recommendations = self.coordinator.data.get("recommendations", {})
+        ai_mode = recommendations.get("hvac_mode")
+
+        if ai_mode:
+            return ai_mode
+
+        # If no mode recommendation, return current mode
+        main_climate_state = self.coordinator.data.get("main_climate_state")
+        if main_climate_state:
+            current_mode = main_climate_state.get("hvac_mode", "unknown")
+            return f"{current_mode} (no change)"
+
+        return "unknown"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return detailed reasoning for the mode recommendation."""
+        if not self.coordinator.data:
+            return {"status": "no_data"}
+
+        recommendations = self.coordinator.data.get("recommendations", {})
+        main_climate_state = self.coordinator.data.get("main_climate_state", {})
+        room_states = self.coordinator.data.get("room_states", {})
+
+        current_mode = main_climate_state.get("hvac_mode", "unknown")
+        current_action = main_climate_state.get("hvac_action", "unknown")
+        ai_recommended_mode = recommendations.get("hvac_mode")
+
+        attrs = {
+            "current_hvac_mode": current_mode,
+            "current_hvac_action": current_action,
+            "ai_recommended_mode": ai_recommended_mode if ai_recommended_mode else "no_change",
+            "mode_change_needed": ai_recommended_mode is not None and ai_recommended_mode != current_mode,
+        }
+
+        # Add reasoning based on current conditions
+        reasoning = []
+
+        # Check temperature conditions
+        temps = [s.get("current_temperature") for s in room_states.values() if s.get("current_temperature") is not None]
+        if temps:
+            avg_temp = sum(temps) / len(temps)
+            target_temp = next((s.get("target_temperature") for s in room_states.values()), None)
+
+            if target_temp:
+                temp_diff = avg_temp - target_temp
+                deadband = self._optimizer.temperature_deadband if self._optimizer else 0.5
+
+                if abs(temp_diff) <= deadband:
+                    reasoning.append("All rooms at target temperature")
+                    attrs["temperature_status"] = "at_target"
+                elif temp_diff > deadband:
+                    reasoning.append(f"Rooms too hot (avg {temp_diff:+.1f}°C from target)")
+                    attrs["temperature_status"] = "too_hot"
+                else:
+                    reasoning.append(f"Rooms too cold (avg {temp_diff:+.1f}°C from target)")
+                    attrs["temperature_status"] = "too_cold"
+
+                attrs["average_temperature"] = round(avg_temp, 1)
+                attrs["target_temperature"] = target_temp
+                attrs["temperature_difference"] = round(temp_diff, 1)
+
+        # Check humidity conditions if enabled
+        if self._optimizer and self._optimizer.enable_humidity_control:
+            humidity_readings = [s.get("current_humidity") for s in room_states.values() if s.get("current_humidity") is not None]
+            if humidity_readings:
+                avg_humidity = sum(humidity_readings) / len(humidity_readings)
+                humidity_max = self._optimizer.target_humidity_max
+                humidity_min = self._optimizer.target_humidity_min
+                humidity_deadband = self._optimizer.humidity_deadband
+
+                attrs["average_humidity"] = round(avg_humidity, 1)
+                attrs["humidity_target_range"] = f"{humidity_min}-{humidity_max}%"
+
+                if avg_humidity > humidity_max + humidity_deadband:
+                    reasoning.append(f"Humidity too high ({avg_humidity:.1f}% > {humidity_max}%)")
+                    attrs["humidity_status"] = "too_high"
+                elif avg_humidity < humidity_min - humidity_deadband:
+                    reasoning.append(f"Humidity too low ({avg_humidity:.1f}% < {humidity_min}%)")
+                    attrs["humidity_status"] = "too_low"
+                else:
+                    reasoning.append(f"Humidity optimal ({avg_humidity:.1f}%)")
+                    attrs["humidity_status"] = "optimal"
+
+        # Check fan mode eligibility
+        if self._optimizer and self._optimizer.use_fan_mode_for_circulation:
+            attrs["fan_mode_enabled"] = True
+            if attrs.get("temperature_status") == "at_target":
+                reasoning.append("Eligible for fan-only mode (energy saving)")
+        else:
+            attrs["fan_mode_enabled"] = False
+
+        # Determine expected mode based on conditions
+        expected_mode = self._determine_expected_mode(attrs)
+        attrs["expected_mode"] = expected_mode
+
+        if ai_recommended_mode:
+            if ai_recommended_mode == expected_mode:
+                reasoning.append(f"AI correctly recommends {ai_recommended_mode} mode")
+            else:
+                reasoning.append(f"AI recommends {ai_recommended_mode} (expected: {expected_mode})")
+
+        attrs["reasoning"] = " | ".join(reasoning) if reasoning else "No specific conditions detected"
+
+        # Add feature flags
+        attrs["humidity_control_enabled"] = self._optimizer.enable_humidity_control if self._optimizer else False
+        attrs["fan_circulation_enabled"] = self._optimizer.use_fan_mode_for_circulation if self._optimizer else False
+
+        return attrs
+
+    def _determine_expected_mode(self, attrs: dict) -> str:
+        """Determine what mode should be recommended based on conditions."""
+        temp_status = attrs.get("temperature_status")
+        humidity_status = attrs.get("humidity_status")
+        fan_mode_enabled = attrs.get("fan_mode_enabled", False)
+        humidity_control_enabled = self._optimizer.enable_humidity_control if self._optimizer else False
+
+        # Priority 1: Temperature control
+        if temp_status == "too_hot":
+            return "cool"
+        elif temp_status == "too_cold":
+            return "heat"
+
+        # Priority 2: Humidity control (only if temps are stable)
+        if temp_status == "at_target" and humidity_control_enabled:
+            if humidity_status == "too_high":
+                return "dry"
+
+        # Priority 3: Energy saving (only if temps and humidity are good)
+        if temp_status == "at_target" and fan_mode_enabled:
+            if humidity_status in ["optimal", None]:
+                return "fan_only"
+
+        # Default: maintain current mode or cool
+        main_climate_state = self.coordinator.data.get("main_climate_state", {})
+        current_mode = main_climate_state.get("hvac_mode", "cool")
+        return current_mode
 
